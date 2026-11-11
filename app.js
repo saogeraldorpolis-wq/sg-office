@@ -7,7 +7,7 @@
  * ========================================================= */
 'use strict';
 
-const VERSAO = '1.3.0';
+const VERSAO = '1.3.1';
 const SUPA = (window.SGO_CFG?.SUPABASE_URL || '').replace(/\/$/, '');
 const AKEY = window.SGO_CFG?.SUPABASE_KEY || '';
 const K_SESS = 'sgo_mob_sess';      // {access_token, refresh_token, usuario, user_id}
@@ -283,7 +283,7 @@ const M = window.M = {
                 <span style="font-size:11px;color:var(--txt2)">${u.papel === 'admin' ? 'Administrador' : 'Colaborador'}</span>
             </div>
         </div>
-        ${u.papel === 'admin' ? `<div class="menu-sec"><div class="menu-sec-titulo">VISÃO</div>
+        ${u.papel === 'admin' && Array.isArray(u.empresas) ? `<div class="menu-sec"><div class="menu-sec-titulo">VISÃO</div>
             <button class="menu-item" onclick="M.toggleEscopoMenu()"><i class="fa-solid fa-briefcase"></i>
             Só minha carteira<small>${escopoCart ? 'ativado' : 'todas as empresas'}</small></button></div>` : ''}
         <div class="menu-sec"><div class="menu-sec-titulo">APARÊNCIA</div>
@@ -407,7 +407,8 @@ const M = window.M = {
         const u = M.usuario;
         if (!u) return null;
         if (u.papel === 'admin')
-            return localStorage.getItem(K_ESCOPO) === 'carteira' ? new Set(u.empresas || []) : null;
+            return Array.isArray(u.empresas) && localStorage.getItem(K_ESCOPO) === 'carteira'
+                ? new Set(u.empresas) : null;
         return Array.isArray(u.empresas) ? new Set(u.empresas) : null;
     },
     dentroEscopo(empresa_id) { const s = M.escopo(); return !s || !empresa_id || s.has(empresa_id); },
