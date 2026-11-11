@@ -164,7 +164,7 @@ const M = window.M = {
         const j = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(j.error_description || j.msg || 'Usuário ou senha inválidos.');
         M.sess = { access_token: j.access_token, refresh_token: j.refresh_token,
-                   usuario, user_id: j.user?.id, em: Date.now() };
+                   usuario, email, user_id: j.user?.id, em: Date.now() };
         localStorage.setItem(K_SESS, JSON.stringify(M.sess));
     },
 
@@ -216,13 +216,16 @@ const M = window.M = {
                 : (() => { try { return JSON.parse(l.valor); } catch { return []; } })();
         }
         M.dados = dados;
-        // resolve o usuário logado dentro de sgo_usuarios
+        // resolve o usuário logado em `usuarios` — casa pelo e-mail usado
+        // no Auth (funciona p/ usuário, CPF e e-mail digitados)
         const us = dados.usuarios || [];
+        const em = (M.sess.email || '').toLowerCase();
+        const dig = String(M.sess.usuario || '').replace(/\D/g, '');
         M.usuario = us.find(u =>
-            (u.email && u.email.toLowerCase() === String(M.sess.usuario).toLowerCase()) ||
+            (u.email && u.email.toLowerCase() === em) ||
+            ((u.email || `${u.usuario}@sgoffice.local`).toLowerCase() === em) ||
             u.usuario === M.sess.usuario ||
-            (u.email || `${u.usuario}@sgoffice.local`).toLowerCase() ===
-                (M.sess.usuario.includes('@') ? M.sess.usuario : `${M.sess.usuario}@sgoffice.local`).toLowerCase()
+            (dig.length === 11 && String(u.cpf || '').replace(/\D/g, '') === dig)
         ) || { nome: M.sess.usuario, papel: 'colaborador', permissoes: {}, status: 'aprovado' };
     },
 
@@ -628,6 +631,17 @@ function itemLinha(i, podeLembrete) {
 (function boot() {
     $('#v-login').textContent = VERSAO;
     if (localStorage.getItem(K_TEMA) === 'claro') document.body.classList.add('claro');
+
+    // máscara de CPF no login: só formata quando a entrada é só dígitos
+    $('#l-usuario').addEventListener('input', (ev) => {
+        const v = ev.target.value;
+        if (!/^\d[\d.\-]*$/.test(v)) return;        // tem letra → usuário/e-mail
+        const d = v.replace(/\D/g, '').slice(0, 11);
+        ev.target.value = d
+            .replace(/(\d{3})(\d)/, '$1.$2')
+            .replace(/(\d{3})(\d)/, '$1.$2')
+            .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    });
 
     $('#form-login').addEventListener('submit', async (ev) => {
         ev.preventDefault();
