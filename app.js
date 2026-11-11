@@ -7,7 +7,7 @@
  * ========================================================= */
 'use strict';
 
-const VERSAO = '1.3.5';
+const VERSAO = '1.3.6';
 const SUPA = (window.SGO_CFG?.SUPABASE_URL || '').replace(/\/$/, '');
 const AKEY = window.SGO_CFG?.SUPABASE_KEY || '';
 const K_SESS = 'sgo_mob_sess';      // {access_token, refresh_token, usuario, user_id}
@@ -105,6 +105,25 @@ const setStatus = (on) => {
     const t = $('#txt-status'); if (t) t.textContent = on ? 'Conectado' : 'Offline';
 };
 const splashSync = (v) => $('#splash-sync').classList.toggle('hidden', !v);
+
+/* cheque determinístico de versão — compara VERSAO local c/ o versao.json
+   da rede (sem cache) — usado no boot e no botão "Atualizar aplicativo".
+   Retorna true (vai recarregar), false (já atualizado) ou null (offline). */
+async function checarVersao(forcar) {
+    try {
+        const j = await fetch('versao.json', { cache: 'no-store' })
+            .then(r => r.ok ? r.json() : null);
+        if (!j || j.versao === VERSAO) return false;
+        if (!forcar && sessionStorage.getItem('sgo_vtry') === j.versao) return false;
+        sessionStorage.setItem('sgo_vtry', j.versao);
+        try {
+            const reg = await navigator.serviceWorker?.getRegistration();
+            await reg?.update();
+        } catch { /* sem SW */ }
+        location.reload();
+        return true;
+    } catch { return null; }
+}
 
 /* ---------- REST helpers ---------- */
 async function rest(path, opts = {}, token) {
@@ -317,8 +336,9 @@ const M = window.M = {
     copiarDev() { navigator.clipboard?.writeText(DEV_ID); toast('ID do aparelho copiado.'); },
     async atualizarApp() {
         toast('Procurando atualização…');
-        try { const r = await navigator.serviceWorker?.getRegistration(); await r?.update(); }
-        catch { /* offline */ }
+        const r = await checarVersao(true);
+        if (r === false) toast(`Já está na versão mais recente (v${VERSAO}).`);
+        else if (r === null) toast('Sem conexão para verificar.', true);
     },
 
     /* ---------- biometria (WebAuthn platform: digital/FaceID) ---------- */
@@ -1091,30 +1111,8 @@ function itemLinha(i, podeLembrete) {
     $('#v-login').textContent = VERSAO;
     aplicarAparencia();
 
-    /* atualização automática: força check do SW e recarrega quando a
-       versão nova assumir (senão a aba aberta fica presa na versão velha) */
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistration().then(r => r && r.update());
-        let recarregou = false;
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-            if (recarregou) return;
-            recarregou = true;
-            location.reload();
-        });
-    }
-    /* cheque determinístico de versão: compara VERSAO local c/ o
-       versao.json da rede (sem cache) — se mudou, força update + reload */
-    fetch('versao.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null)
-        .then(async j => {
-            if (!j || j.versao === VERSAO) return;
-            if (sessionStorage.getItem('sgo_vtry') === j.versao) return;  // já tentou
-            sessionStorage.setItem('sgo_vtry', j.versao);
-            try {
-                const reg = await navigator.serviceWorker?.getRegistration();
-                await reg?.update();
-            } catch { /* sem SW */ }
-            location.reload();
-        }).catch(() => {});
+    /* cheque de versão no boot — o SW register/update fica no fim do boot */
+    checarVersao();
     /* pull-to-refresh: arrasta no topo da lista → sincroniza */
     const c = $('#conteudo'), ptrEl = $('#ptr'), ptrIco = ptrEl.querySelector('i');
     let y0 = null, puxa = 0, ptrBusy = false;
