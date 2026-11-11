@@ -7,7 +7,7 @@
  * ========================================================= */
 'use strict';
 
-const VERSAO = '1.3.1';
+const VERSAO = '1.3.2';
 const SUPA = (window.SGO_CFG?.SUPABASE_URL || '').replace(/\/$/, '');
 const AKEY = window.SGO_CFG?.SUPABASE_KEY || '';
 const K_SESS = 'sgo_mob_sess';      // {access_token, refresh_token, usuario, user_id}
@@ -344,6 +344,7 @@ const M = window.M = {
                 allowCredentials: [{ type: 'public-key', id }],
                 userVerification: 'required', timeout: 60000 } });
             $('#bio-lock').classList.add('hidden');
+            $('#tela-login').classList.add('hidden');
             $('#app').classList.remove('hidden');
             await M.sincronizar(true);
         } catch { /* cancelou ou falhou — permanece no lock */ }
