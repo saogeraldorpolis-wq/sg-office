@@ -7,7 +7,7 @@
  * ========================================================= */
 'use strict';
 
-const VERSAO = '1.3.7';
+const VERSAO = '1.3.8';
 const SUPA = (window.SGO_CFG?.SUPABASE_URL || '').replace(/\/$/, '');
 const AKEY = window.SGO_CFG?.SUPABASE_KEY || '';
 const K_SESS = 'sgo_mob_sess';      // {access_token, refresh_token, usuario, user_id}
@@ -1130,6 +1130,10 @@ function itemLinha(i, podeLembrete) {
 
     /* cheque de versão no boot — o SW register/update fica no fim do boot */
     checarVersao();
+    /* pill Conectado/Offline acompanha a rede em tempo real */
+    window.addEventListener('online', () => { setStatus(true); if (M.sessao) M.sincronizar(); });
+    window.addEventListener('offline', () => setStatus(false));
+    setStatus(navigator.onLine);
     /* pull-to-refresh: arrasta no topo da lista → sincroniza */
     const c = $('#conteudo'), ptrEl = $('#ptr'), ptrIco = ptrEl.querySelector('i');
     let y0 = null, puxa = 0, ptrBusy = false;

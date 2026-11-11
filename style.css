@@ -576,3 +576,10 @@ body[data-tema="claro"] .pill.info { color: #0284c7; }
 
 /* ---------- BI (gr�ficos) ---------- */
 .bi-chart { height: 220px; position: relative; padding: 6px 4px 0; }
+
+/* acessibilidade — movimento reduzido desliga fundos, anéis e pulsos */
+@media (prefers-reduced-motion: reduce) {
+    .fundo, .fundo::before, .fundo::after,
+    .anel-ext, .anel-int, .bio-anel, .ptr.gira i { animation: none !important; }
+    .card, .hero, .ola, .stats, .linha, .sheet { animation-duration: .01ms !important; }
+}
