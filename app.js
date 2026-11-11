@@ -646,6 +646,18 @@ function itemLinha(i, podeLembrete) {
 (function boot() {
     $('#v-login').textContent = VERSAO;
     aplicarAparencia();
+
+    /* atualização automática: força check do SW e recarrega quando a
+       versão nova assumir (senão a aba aberta fica presa na versão velha) */
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistration().then(r => r && r.update());
+        let recarregou = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (recarregou) return;
+            recarregou = true;
+            location.reload();
+        });
+    }
     document.querySelectorAll('#seg-tema button').forEach(b =>
         b.onclick = () => setTema(b.dataset.t));
     document.querySelectorAll('#seg-fundo button').forEach(b =>
