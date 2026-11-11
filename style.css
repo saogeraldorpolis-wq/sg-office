@@ -140,6 +140,10 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 input { font: inherit; }
 
 /* ==================== LOGIN ==================== */
+/* rede de seguranÃ§a: com o app visÃ­vel, login/lock nunca ficam por cima */
+body:has(> #app:not(.hidden)) > .tela-login,
+body:has(> #app:not(.hidden)) > .bio-lock { display: none !important; }
+
 .tela-login {
     position: fixed; inset: 0; z-index: 50;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -462,7 +466,7 @@ body[data-tema="claro"] .pill.info { color: #0284c7; }
 .menu-item > i { width: 20px; text-align: center; color: var(--prim); flex-shrink: 0; }
 .menu-item small { margin-left: auto; color: var(--txt3); font-size: 10.5px; }
 
-/* ---------- modal aparência ---------- */
+/* ---------- modal aparï¿½ncia ---------- */
 .modal-veu {
     position: fixed; inset: 0; z-index: 70; background: #000b;
     backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
@@ -538,7 +542,7 @@ body[data-tema="claro"] .pill.info { color: #0284c7; }
 .stat-valor { font-size: 22px; font-weight: 800; margin-top: 4px; color: var(--prim); }
 .stat-sub { font-size: 10.5px; color: var(--txt2); margin-top: 2px; }
 
-/* ---------- lock biométrico ---------- */
+/* ---------- lock biomï¿½trico ---------- */
 .bio-lock {
     position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 18px; padding: 24px;
@@ -558,7 +562,7 @@ body[data-tema="claro"] .pill.info { color: #0284c7; }
 .bio-lock p { font-size: 12.5px; color: var(--txt2); }
 .bio-alt { font-size: 12px; color: var(--prim); text-decoration: underline; }
 
-/* ---------- módulos: sub-abas do Prazos e listas fiscais ---------- */
+/* ---------- mï¿½dulos: sub-abas do Prazos e listas fiscais ---------- */
 .subseg { display: flex; gap: 6px; margin-bottom: 12px; }
 .subseg button {
     flex: 1; padding: 9px 6px; border-radius: 11px; font-size: 11.5px; font-weight: 600;
@@ -570,5 +574,5 @@ body[data-tema="claro"] .pill.info { color: #0284c7; }
 }
 .diag { font-size: 11px; color: var(--txt2); margin: 8px 0; line-height: 1.55; }
 
-/* ---------- BI (gráficos) ---------- */
+/* ---------- BI (grï¿½ficos) ---------- */
 .bi-chart { height: 220px; position: relative; padding: 6px 4px 0; }
