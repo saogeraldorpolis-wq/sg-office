@@ -569,3 +569,6 @@ body[data-tema="claro"] .pill.info { color: #0284c7; }
     color: #1c1203; border-color: transparent;
 }
 .diag { font-size: 11px; color: var(--txt2); margin: 8px 0; line-height: 1.55; }
+
+/* ---------- BI (gráficos) ---------- */
+.bi-chart { height: 220px; position: relative; padding: 6px 4px 0; }

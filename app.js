@@ -7,7 +7,7 @@
  * ========================================================= */
 'use strict';
 
-const VERSAO = '1.2.0';
+const VERSAO = '1.3.0';
 const SUPA = (window.SGO_CFG?.SUPABASE_URL || '').replace(/\/$/, '');
 const AKEY = window.SGO_CFG?.SUPABASE_KEY || '';
 const K_SESS = 'sgo_mob_sess';      // {access_token, refresh_token, usuario, user_id}
@@ -479,6 +479,7 @@ const M = window.M = {
                       fiscal: R.fiscal, folha: R.folha, situacao: R.situacao,
                       tarefas: R.tarefas, perfil: R.perfil };
         $('#conteudo').innerHTML = M._emp ? R.empresaDetalhe(M._emp) : (map[M._aba] || R.inicio)();
+        initBiCharts();
     },
 
     badges() {
@@ -489,6 +490,7 @@ const M = window.M = {
     },
 
     pzSub(s) { M._pzSub = s; M.render(); },
+    panSub(s) { M._panSub = s; M.render(); },
     setComp(c) { M._comp = c; M.render(); },
 
     voltarEmpresa() { M._emp = null; M.render(); },
@@ -582,7 +584,16 @@ const pillData = (dias, data) => {
 
 /* ==================== RENDERERS ==================== */
 const R = {
+    /* Panorama: sub-abas Resumo | BI */
     inicio() {
+        const sub = M._panSub || 'resumo';
+        const corpo = sub === 'bi' ? R.bi() : R.resumo();
+        return `<div class="subseg">${[['resumo', 'Resumo'], ['bi', 'BI']]
+            .map(([id, n]) => `<button class="${sub === id ? 'on' : ''}" onclick="M.panSub('${id}')">${n}</button>`).join('')}</div>
+            ${corpo}`;
+    },
+
+    resumo() {
         const u = M.usuario || {};
         const hora = new Date().getHours();
         const saud = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
@@ -858,6 +869,47 @@ const R = {
         </div>`;
     },
 
+    /* ---------- BI (estilo desktop: faturamento + funcionários globais) ---------- */
+    bi() {
+        const bi = M.filtra('bi_mensal');
+        if (!bi.length && !window.Chart)
+            return '<div class="vazio"><i class="fa-solid fa-chart-column"></i> Sem dados de BI ainda.</div>';
+        const ano = String(new Date().getFullYear());
+        const doAno = bi.filter(x => String(x.competencia || '').startsWith(ano));
+        const fatAno = doAno.reduce((s, x) => s + (+x.faturamento || 0), 0);
+        const comps = [...new Set(bi.map(x => x.competencia).filter(Boolean))].sort();
+        const ultComp = comps[comps.length - 1];
+        const ultFat = bi.filter(x => x.competencia === ultComp)
+            .reduce((s, x) => s + (+x.faturamento || 0), 0);
+        const nComps = comps.length || 1;
+        const funcsAtivos = M.filtra('funcionarios').filter(funcAtivo).length;
+        const temFunc = bi.some(x => x.funcionarios != null && +x.funcionarios > 0);
+        return `
+        <div class="stats">
+            <div class="stat"><div class="stat-titulo">FATURAMENTO ${ano}</div>
+                <div class="stat-valor" style="font-size:17px">${fmtMoeda(fatAno)}</div>
+                <div class="stat-sub">soma da visão atual</div></div>
+            <div class="stat"><div class="stat-titulo">MÉDIA MENSAL</div>
+                <div class="stat-valor" style="font-size:17px">${fmtMoeda(fatAno / Math.max(nComps, 1))}</div>
+                <div class="stat-sub">último mês: ${fmtMoeda(ultFat)}</div></div>
+            <div class="stat"><div class="stat-titulo">FUNCIONÁRIOS</div>
+                <div class="stat-valor">${funcsAtivos}</div>
+                <div class="stat-sub">ativos na visão atual</div></div>
+            <div class="stat"><div class="stat-titulo">COMPETÊNCIAS</div>
+                <div class="stat-valor">${comps.length}</div>
+                <div class="stat-sub">com dados de BI</div></div>
+        </div>
+        <div class="card"><div class="card-head"><h3><i class="fa-solid fa-chart-column" style="color:#f59e0b"></i> Faturamento global</h3></div>
+            ${window.Chart ? '<div class="bi-chart"><canvas id="bi-fat"></canvas></div>' : '<div class="vazio">Gráfico precisa de conexão na primeira carga.</div>'}
+        </div>
+        ${temFunc ? `<div class="card"><div class="card-head"><h3><i class="fa-solid fa-chart-column" style="color:#38bdf8"></i> Funcionários por competência</h3></div>
+            ${window.Chart ? '<div class="bi-chart"><canvas id="bi-func"></canvas></div>' : ''}</div>` : ''}
+        <div class="card"><div class="card-head"><h3><i class="fa-solid fa-chart-pie" style="color:#a78bfa"></i> Empresas por regime</h3></div>
+            ${window.Chart ? '<div class="bi-chart" style="height:190px"><canvas id="bi-reg"></canvas></div>' : ''}</div>
+        <div class="card"><div class="card-head"><h3><i class="fa-solid fa-users" style="color:#34d399"></i> Funcionários por empresa (top 8)</h3></div>
+            ${window.Chart ? '<div class="bi-chart" style="height:200px"><canvas id="bi-fempe"></canvas></div>' : ''}</div>`;
+    },
+
     vencimentos() {
         const todos = itensPrazo();
         const f = M._prazoF;
@@ -939,6 +991,77 @@ const R = {
             SG Office Mobile · v${VERSAO}</p>`;
     },
 };
+
+/* gráficos do BI — recriados a cada render (canvas novo no DOM) */
+function initBiCharts() {
+    (M._charts || []).forEach(c => c.destroy()); M._charts = [];
+    if (!window.Chart || !document.getElementById('bi-fat')) return;
+    const cssVar = (v) => getComputedStyle(document.body).getPropertyValue(v).trim();
+    Chart.defaults.color = cssVar('--txt2') || '#9aa7bd';
+    Chart.defaults.font.size = 10;
+    const grid = { color: (cssVar('--txt3') || '#64748b') + '44' };
+
+    const bi = M.filtra('bi_mensal');
+    const m = {};
+    for (const x of bi) {
+        if (!x.competencia) continue;
+        const a = m[x.competencia] = m[x.competencia] || { fat: 0, fun: 0, temF: false };
+        a.fat += (+x.faturamento || 0);
+        if (x.funcionarios != null) { a.fun += (+x.funcionarios || 0); a.temF = true; }
+    }
+    const comps = Object.keys(m).sort().slice(-12);
+    const moeda = (v) => (+v).toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+    const mk = (el, cfg) => el && M._charts.push(new Chart(el, cfg));
+
+    if (comps.length) {
+        mk($('#bi-fat'), {
+            type: 'bar',
+            data: { labels: comps, datasets: [{ data: comps.map(c => m[c].fat),
+                backgroundColor: '#f59e0bcc', borderRadius: 6 }] },
+            options: { plugins: { legend: { display: false },
+                    tooltip: { callbacks: { label: (c) => 'R$ ' + moeda(c.parsed.y) } } },
+                scales: { x: { grid: { display: false } },
+                          y: { grid, ticks: { callback: moeda } } },
+                maintainAspectRatio: false } });
+        mk($('#bi-func'), {
+            type: 'bar',
+            data: { labels: comps, datasets: [{ data: comps.map(c => m[c].temF ? m[c].fun : null),
+                backgroundColor: '#38bdf8cc', borderRadius: 6 }] },
+            options: { plugins: { legend: { display: false } },
+                scales: { x: { grid: { display: false } },
+                          y: { grid, beginAtZero: true, ticks: { precision: 0 } } },
+                maintainAspectRatio: false } });
+    }
+
+    const elReg = $('#bi-reg');
+    if (elReg) {
+        const cont = {};
+        for (const e of M.filtra('empresas').filter(ativa))
+            cont[regimeVigente(e)] = (cont[regimeVigente(e)] || 0) + 1;
+        if (Object.keys(cont).length) mk(elReg, {
+            type: 'doughnut',
+            data: { labels: Object.keys(cont),
+                datasets: [{ data: Object.values(cont), borderWidth: 0,
+                    backgroundColor: ['#f59e0b', '#38bdf8', '#a78bfa', '#34d399', '#f472b6', '#fb923c', '#22d3ee'] }] },
+            options: { plugins: { legend: { position: 'right' } }, maintainAspectRatio: false } });
+    }
+
+    const elFE = $('#bi-fempe');
+    if (elFE) {
+        const cont = {};
+        for (const f of M.filtra('funcionarios').filter(funcAtivo))
+            cont[f.empresa_id] = (cont[f.empresa_id] || 0) + 1;
+        const top = Object.entries(cont).sort((a, b) => b[1] - a[1]).slice(0, 8);
+        if (top.length) mk(elFE, {
+            type: 'bar',
+            data: { labels: top.map(([id]) => (empNome(id) || '?').slice(0, 18)),
+                datasets: [{ data: top.map(([, n]) => n), backgroundColor: '#34d399cc', borderRadius: 6 }] },
+            options: { indexAxis: 'y', plugins: { legend: { display: false } },
+                scales: { x: { grid, beginAtZero: true, ticks: { precision: 0 } },
+                          y: { grid: { display: false } } },
+                maintainAspectRatio: false } });
+    }
+}
 
 /* linha genérica de item de prazo */
 function itemLinha(i, podeLembrete) {
