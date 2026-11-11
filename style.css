@@ -39,6 +39,27 @@ body {
     overflow: hidden;
     transition: background .35s, color .35s;
 }
+/* fundos escolhidos na tela de login — fixos por dispositivo */
+body[data-fundo="aura"] {
+    background:
+        radial-gradient(700px 400px at 50% -10%, #f59e0b18, transparent 60%),
+        radial-gradient(500px 300px at 90% 110%, #38bdf810, transparent 60%),
+        var(--bg);
+}
+body[data-fundo="estrelas"] {
+    background-color: var(--bg);
+    background-image:
+        radial-gradient(#f59e0b30 1px, transparent 1.7px),
+        radial-gradient(#ffffff21 1px, transparent 1.7px);
+    background-size: 110px 110px, 70px 70px;
+    background-position: 0 0, 35px 52px;
+}
+body.claro[data-fundo="estrelas"] {
+    background-image:
+        radial-gradient(#b4530933 1px, transparent 1.7px),
+        radial-gradient(#47556924 1px, transparent 1.7px);
+}
+/* 'liso' usa o var(--bg) padrão */
 .hidden { display: none !important; }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
 input { font: inherit; }
@@ -48,10 +69,20 @@ input { font: inherit; }
     position: fixed; inset: 0; z-index: 50;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 22px; padding: 24px;
-    background:
-        radial-gradient(700px 400px at 50% -10%, #f59e0b18, transparent 60%),
-        radial-gradient(500px 300px at 90% 110%, #38bdf810, transparent 60%),
-        var(--bg);
+    background: transparent;   /* o fundo vem do body[data-fundo] */
+}
+.login-prefs { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.seg {
+    display: flex; gap: 4px; padding: 4px;
+    background: var(--card); border: 1px solid var(--borda); border-radius: 999px;
+    box-shadow: var(--sombra);
+}
+.seg button {
+    padding: 6px 13px; border-radius: 999px; font-size: 11.5px; font-weight: 600;
+    color: var(--txt2); display: flex; align-items: center; gap: 6px; transition: .2s;
+}
+.seg button.on {
+    background: linear-gradient(135deg, var(--prim), var(--prim2)); color: #1c1203;
 }
 .login-anel svg { width: 108px; height: 108px; }
 .anel-ext { transform-origin: center; animation: girar 9s linear infinite; }

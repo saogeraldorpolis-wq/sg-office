@@ -12,6 +12,21 @@ const SUPA = (window.SGO_CFG?.SUPABASE_URL || '').replace(/\/$/, '');
 const AKEY = window.SGO_CFG?.SUPABASE_KEY || '';
 const K_SESS = 'sgo_mob_sess';      // {access_token, refresh_token, usuario, user_id}
 const K_TEMA = 'sgo_mob_tema';
+const K_FUNDO = 'sgo_mob_fundo';
+
+/* tema (sacro|claro) + fundo (aura|estrelas|liso) — fixos por dispositivo */
+function aplicarAparencia() {
+    const tema = localStorage.getItem(K_TEMA) || 'sacro';
+    const fundo = localStorage.getItem(K_FUNDO) || 'aura';
+    document.body.classList.toggle('claro', tema === 'claro');
+    document.body.dataset.fundo = fundo;
+    document.querySelectorAll('#seg-tema button').forEach(b =>
+        b.classList.toggle('on', b.dataset.t === tema));
+    document.querySelectorAll('#seg-fundo button').forEach(b =>
+        b.classList.toggle('on', b.dataset.f === fundo));
+}
+function setTema(t) { localStorage.setItem(K_TEMA, t); aplicarAparencia(); }
+function setFundo(f) { localStorage.setItem(K_FUNDO, f); aplicarAparencia(); }
 const K_ESCOPO = 'sgo_mob_escopo';  // admin: 'total'|'carteira'
 
 const $ = (s) => document.querySelector(s);
@@ -348,8 +363,8 @@ const M = window.M = {
         M.render();
     },
     toggleTema() {
-        const v = document.body.classList.toggle('claro');
-        localStorage.setItem(K_TEMA, v ? 'claro' : 'escuro');
+        setTema(document.body.classList.contains('claro') ? 'sacro' : 'claro');
+        M.render();
     },
 };
 
@@ -630,7 +645,11 @@ function itemLinha(i, podeLembrete) {
 /* ==================== BOOT ==================== */
 (function boot() {
     $('#v-login').textContent = VERSAO;
-    if (localStorage.getItem(K_TEMA) === 'claro') document.body.classList.add('claro');
+    aplicarAparencia();
+    document.querySelectorAll('#seg-tema button').forEach(b =>
+        b.onclick = () => setTema(b.dataset.t));
+    document.querySelectorAll('#seg-fundo button').forEach(b =>
+        b.onclick = () => setFundo(b.dataset.f));
 
     // máscara de CPF no login: só formata quando a entrada é só dígitos
     $('#l-usuario').addEventListener('input', (ev) => {
