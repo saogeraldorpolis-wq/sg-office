@@ -557,3 +557,15 @@ body[data-tema="claro"] .pill.info { color: #0284c7; }
 }
 .bio-lock p { font-size: 12.5px; color: var(--txt2); }
 .bio-alt { font-size: 12px; color: var(--prim); text-decoration: underline; }
+
+/* ---------- módulos: sub-abas do Prazos e listas fiscais ---------- */
+.subseg { display: flex; gap: 6px; margin-bottom: 12px; }
+.subseg button {
+    flex: 1; padding: 9px 6px; border-radius: 11px; font-size: 11.5px; font-weight: 600;
+    color: var(--txt2); background: var(--card); border: 1px solid var(--borda);
+}
+.subseg button.on {
+    background: linear-gradient(135deg, var(--prim), var(--prim2));
+    color: #1c1203; border-color: transparent;
+}
+.diag { font-size: 11px; color: var(--txt2); margin: 8px 0; line-height: 1.55; }

@@ -7,7 +7,7 @@
  * ========================================================= */
 'use strict';
 
-const VERSAO = '1.1.1';
+const VERSAO = '1.2.0';
 const SUPA = (window.SGO_CFG?.SUPABASE_URL || '').replace(/\/$/, '');
 const AKEY = window.SGO_CFG?.SUPABASE_KEY || '';
 const K_SESS = 'sgo_mob_sess';      // {access_token, refresh_token, usuario, user_id}
@@ -465,8 +465,9 @@ const M = window.M = {
         M._emp = null; M._busca = '';
         document.querySelectorAll('.nav-btn').forEach(b =>
             b.classList.toggle('ativo', b.dataset.aba === nome));
-        const titulos = { inicio: 'Início', empresas: 'Empresas', prazos: 'Prazos',
-                          tarefas: 'Tarefas', perfil: 'Perfil' };
+        const titulos = { inicio: 'Panorama', fiscal: 'Fiscal', folha: 'Folha',
+                          situacao: 'Situação fiscal', prazos: 'Prazos e documentos',
+                          empresas: 'Empresas', perfil: 'Perfil' };
         $('#topo-titulo').textContent = titulos[nome] || 'SG Office';
         M.render();
         $('#conteudo').scrollTop = 0;
@@ -475,16 +476,20 @@ const M = window.M = {
     render() {
         M.badges();
         const map = { inicio: R.inicio, empresas: R.empresas, prazos: R.prazos,
+                      fiscal: R.fiscal, folha: R.folha, situacao: R.situacao,
                       tarefas: R.tarefas, perfil: R.perfil };
         $('#conteudo').innerHTML = M._emp ? R.empresaDetalhe(M._emp) : (map[M._aba] || R.inicio)();
     },
 
     badges() {
-        const nP = itensPrazo().filter(i => (i.dias ?? 99) <= 15).length;
-        const nT = M.filtra('tarefas').filter(t => (t.coluna || 'afazer') !== 'concluido').length;
-        $('#badge-prazos').textContent = nP; $('#badge-prazos').classList.toggle('hidden', !nP);
-        $('#badge-tarefas').textContent = nT; $('#badge-tarefas').classList.toggle('hidden', !nT);
+        const n = itensPrazo().filter(i => (i.dias ?? 99) <= 15).length
+            + M.filtra('tarefas').filter(t => (t.coluna || 'afazer') !== 'concluido').length;
+        const b = $('#badge-prazos');
+        if (b) { b.textContent = n; b.classList.toggle('hidden', !n); }
     },
+
+    pzSub(s) { M._pzSub = s; M.render(); },
+    setComp(c) { M._comp = c; M.render(); },
 
     voltarEmpresa() { M._emp = null; M.render(); },
     abrirEmpresa(id) { M._emp = id; M.render(); $('#conteudo').scrollTop = 0; },
@@ -521,6 +526,20 @@ const fmtCpf = (c) => {
     const d = String(c || '').replace(/\D/g, '');
     return d.length === 11 ? d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : (c || '');
 };
+const fmtMoeda = (v) => (v == null || v === '' || isNaN(+v)) ? '—'
+    : (+v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const funcAtivo = (f) => !f.demissao && String(f.situacao || 'ativo').toLowerCase() !== 'demitido';
+
+/* competência selecionável nos módulos Fiscal/Folha (chips, mais recente 1º) */
+function compSel(rows) {
+    const comps = [...new Set(rows.map(r => r.competencia).filter(Boolean))].sort().reverse();
+    const atual = hojeISO().slice(0, 7);
+    if (!comps.includes(atual)) comps.unshift(atual);
+    const sel = M._comp && comps.includes(M._comp) ? M._comp : comps[0];
+    return { comps: comps.slice(0, 12), sel };
+}
+const compChips = (comps, sel) => comps.map(c =>
+    `<button class="chip ${c === sel ? 'on' : ''}" onclick="M.setComp('${c}')">${c}</button>`).join('');
 
 /* itens unificados da aba Prazos (certidões + certificados + lembretes + guias) */
 function itensPrazo() {
@@ -710,7 +729,136 @@ const R = {
         </div>` : ''}`;
     },
 
+    /* módulo grande: Vencimentos | Documentos | Tarefas */
     prazos() {
+        const sub = M._pzSub || 'venc';
+        const corpo = sub === 'docs' ? R.documentos()
+            : sub === 'tar' ? R.tarefas() : R.vencimentos();
+        const subs = [['venc', 'Vencimentos'], ['docs', 'Documentos'], ['tar', 'Tarefas']];
+        return `<div class="subseg">${subs.map(([id, n]) =>
+            `<button class="${sub === id ? 'on' : ''}" onclick="M.pzSub('${id}')">${n}</button>`).join('')}</div>
+            ${corpo}`;
+    },
+
+    fiscal() {
+        const obrig = M.cole('fiscal_obrigacoes');
+        const rows0 = M.filtra('fiscal_status');
+        const { comps, sel } = compSel(rows0);
+        const rows = rows0.filter(r => r.competencia === sel);
+        const nomeObr = id => obrig.find(o => o.id === id)?.nome || id || 'Obrigação';
+        const porObr = {};
+        for (const r of rows) (porObr[r.obrigacao_id] ||= []).push(r);
+        const ids = obrig.length ? obrig.map(o => o.id) : Object.keys(porObr);
+        const nPend = rows.filter(r => (r.status || 'pendente') === 'pendente').length;
+        return `
+        <div class="chips">${compChips(comps, sel)}</div>
+        <div class="stats">
+            <div class="stat"><div class="stat-titulo">PENDENTES</div>
+                <div class="stat-valor" style="color:var(--perigo)">${nPend}</div>
+                <div class="stat-sub">obrigações em ${esc(sel)}</div></div>
+            <div class="stat"><div class="stat-titulo">ENTREGUES</div>
+                <div class="stat-valor" style="color:var(--ok)">${rows.length - nPend}</div>
+                <div class="stat-sub">de ${rows.length} marcadas</div></div>
+        </div>
+        ${ids.length === 0
+            ? '<div class="vazio"><i class="fa-regular fa-file-lines"></i> Nenhuma obrigação cadastrada.</div>'
+            : ids.map(oid => {
+                const rs = porObr[oid] || [];
+                const pend = rs.filter(r => (r.status || 'pendente') === 'pendente');
+                return `<div class="card">
+                    <div class="card-head"><h3>${esc(nomeObr(oid))}</h3>
+                        <span class="pill ${pend.length ? 'atencao' : 'ok'}">${rs.length - pend.length}/${rs.length} entregues</span></div>
+                    ${rs.length === 0
+                        ? '<div class="vazio">Nenhuma marcação nesta competência.</div>'
+                        : pend.length === 0
+                            ? '<div class="vazio"><i class="fa-regular fa-circle-check"></i> Tudo entregue.</div>'
+                            : pend.map(r => `<div class="linha">
+                                <i class="fa-solid fa-hourglass-half" style="color:var(--perigo)"></i>
+                                <div class="linha-txt"><b>${esc(empNome(r.empresa_id))}</b>
+                                <span>pendente${r.por ? ' · ' + esc(r.por) : ''}</span></div></div>`).join('')}
+                </div>`;
+            }).join('')}`;
+    },
+
+    folha() {
+        const fech = M.filtra('folha_fechamentos');
+        const { comps, sel } = compSel(fech);
+        const rows = fech.filter(r => r.competencia === sel);
+        const funcs = M.filtra('funcionarios');
+        const nAtivos = id => funcs.filter(f => f.empresa_id === id && funcAtivo(f)).length;
+        const nPend = rows.filter(r => (r.status || 'pendente') !== 'fechado').length;
+        return `
+        <div class="chips">${compChips(comps, sel)}</div>
+        <div class="stats">
+            <div class="stat"><div class="stat-titulo">FUNCIONÁRIOS</div>
+                <div class="stat-valor">${funcs.filter(funcAtivo).length}</div>
+                <div class="stat-sub">ativos cadastrados</div></div>
+            <div class="stat"><div class="stat-titulo">FECHAMENTOS</div>
+                <div class="stat-valor" style="color:${nPend ? 'var(--perigo)' : 'var(--ok)'}">${rows.length - nPend}/${rows.length}</div>
+                <div class="stat-sub">fechados em ${esc(sel)}</div></div>
+        </div>
+        ${rows.length === 0
+            ? '<div class="vazio"><i class="fa-regular fa-calendar-check"></i> Nenhum fechamento nesta competência.</div>'
+            : rows.map(r => {
+                const ok = (r.status || 'pendente') === 'fechado';
+                return `<div class="linha">
+                    <i class="fa-solid ${ok ? 'fa-circle-check' : 'fa-hourglass-half'}" style="color:${ok ? 'var(--ok)' : 'var(--perigo)'}"></i>
+                    <div class="linha-txt"><b>${esc(empNome(r.empresa_id))}</b>
+                    <span>${nAtivos(r.empresa_id)} funcionário(s)${r.por ? ' · ' + esc(r.por) : ''}</span></div>
+                    <span class="pill ${ok ? 'ok' : 'atencao'}">${esc(r.status || 'pendente')}</span></div>`;
+            }).join('')}`;
+    },
+
+    situacao() {
+        const regs = M.filtra('situacao_fiscal');
+        if (!regs.length)
+            return '<div class="vazio"><i class="fa-solid fa-scale-balanced"></i> Nenhum diagnóstico fiscal importado.</div>';
+        return regs.map(s => {
+            const sit = String(s.situacao || '');
+            const ok = ['ATIVO', 'ATIVA', 'REGULAR'].includes(sit.toUpperCase());
+            return `<div class="card">
+                <div class="card-head"><h3>${esc(s.nome_doc || empNome(s.empresa_id))}</h3>
+                    <span class="pill ${ok ? 'ok' : 'vencido'}">${esc(sit || '—')}</span></div>
+                <div class="kv"><span>CNPJ</span><b>${esc(s.cnpj || '—')}</b></div>
+                ${s.regime ? `<div class="kv"><span>Regime</span><b>${esc(s.regime)}</b></div>` : ''}
+                ${s.ie ? `<div class="kv"><span>IE</span><b>${esc(s.ie)}</b></div>` : ''}
+                <div class="kv"><span>Débitos</span><b>${s.qtd_debitos ?? 0} · ${fmtMoeda(s.total_debitos)}</b></div>
+                ${s.acrescimos_ate ? `<div class="kv"><span>Acréscimos até</span><b>${esc(s.acrescimos_ate)}</b></div>` : ''}
+                ${s.atualizado_em ? `<div class="kv"><span>Atualizado</span><b>${esc(s.atualizado_em)}</b></div>` : ''}
+                ${s.diagnostico ? `<p class="diag">${esc(s.diagnostico)}</p>` : ''}
+                ${s.origem ? `<span class="pill neutro">${esc(s.origem)}</span>` : ''}
+            </div>`;
+        }).join('');
+    },
+
+    documentos() {
+        const certs = M.filtra('certidoes');
+        const certifs = M.filtra('certificados');
+        const li = (icone, cor, titulo, sub, venc) => `<div class="linha">
+            <i class="fa-solid ${icone}" style="color:${cor}"></i>
+            <div class="linha-txt"><b>${esc(titulo)}</b><span>${sub}</span></div>
+            ${pillData(diasPara(venc), venc)}</div>`;
+        return `
+        <div class="card">
+            <div class="card-head"><h3><i class="fa-solid fa-file-shield"></i> Certidões</h3>
+                <span class="pill neutro">${certs.length}</span></div>
+            ${certs.length === 0 ? '<div class="vazio">Nenhuma certidão.</div>'
+                : certs.map(c => li('fa-file-shield', '#38bdf8', `Certidão ${c.tipo || ''}`,
+                    [empNome(c.empresa_id), c.numero ? 'nº ' + c.numero : '',
+                     c.pendente ? 'com pendência' : ''].filter(Boolean).map(esc).join(' · '),
+                    c.vencimento)).join('')}
+        </div>
+        <div class="card">
+            <div class="card-head"><h3><i class="fa-solid fa-certificate"></i> Certificados digitais</h3>
+                <span class="pill neutro">${certifs.length}</span></div>
+            ${certifs.length === 0 ? '<div class="vazio">Nenhum certificado.</div>'
+                : certifs.map(c => li('fa-certificate', '#a78bfa',
+                    `Certificado ${c.tipo || 'digital'}${c.titular ? ' · ' + c.titular : ''}`,
+                    esc(empNome(c.empresa_id)), c.vencimento)).join('')}
+        </div>`;
+    },
+
+    vencimentos() {
         const todos = itensPrazo();
         const f = M._prazoF;
         const lista = f === 'todos' ? todos
