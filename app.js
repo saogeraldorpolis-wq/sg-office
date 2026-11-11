@@ -7,7 +7,7 @@
  * ========================================================= */
 'use strict';
 
-const VERSAO = '1.3.4';
+const VERSAO = '1.3.5';
 const SUPA = (window.SGO_CFG?.SUPABASE_URL || '').replace(/\/$/, '');
 const AKEY = window.SGO_CFG?.SUPABASE_KEY || '';
 const K_SESS = 'sgo_mob_sess';      // {access_token, refresh_token, usuario, user_id}
@@ -1102,6 +1102,19 @@ function itemLinha(i, podeLembrete) {
             location.reload();
         });
     }
+    /* cheque determinístico de versão: compara VERSAO local c/ o
+       versao.json da rede (sem cache) — se mudou, força update + reload */
+    fetch('versao.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null)
+        .then(async j => {
+            if (!j || j.versao === VERSAO) return;
+            if (sessionStorage.getItem('sgo_vtry') === j.versao) return;  // já tentou
+            sessionStorage.setItem('sgo_vtry', j.versao);
+            try {
+                const reg = await navigator.serviceWorker?.getRegistration();
+                await reg?.update();
+            } catch { /* sem SW */ }
+            location.reload();
+        }).catch(() => {});
     /* pull-to-refresh: arrasta no topo da lista → sincroniza */
     const c = $('#conteudo'), ptrEl = $('#ptr'), ptrIco = ptrEl.querySelector('i');
     let y0 = null, puxa = 0, ptrBusy = false;
