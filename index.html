@@ -40,17 +40,9 @@
         </form>
         <p class="login-versao">SG Office Mobile · v<span id="v-login">1.0</span></p>
     </div>
-    <div class="login-prefs">
-        <div class="seg" id="seg-tema" role="group" aria-label="Tema">
-            <button type="button" data-t="sacro"><i class="fa-solid fa-moon"></i> Sacro</button>
-            <button type="button" data-t="claro"><i class="fa-solid fa-sun"></i> Claro</button>
-        </div>
-        <div class="seg" id="seg-fundo" role="group" aria-label="Fundo">
-            <button type="button" data-f="aura">Aura</button>
-            <button type="button" data-f="estrelas">Estrelas</button>
-            <button type="button" data-f="liso">Liso</button>
-        </div>
-    </div>
+    <button class="seg ap-atalho" onclick="M.modalAparencia(true)">
+        <i class="fa-solid fa-palette"></i> Aparência
+    </button>
 </div>
 
 <!-- ===================== APP ===================== -->
@@ -63,7 +55,9 @@
         </div>
         <button class="topo-btn" id="btn-sync" title="Sincronizar" onclick="M.sincronizar(true)">
             <i class="fa-solid fa-rotate"></i></button>
-        <span class="dot-status" id="dot-status" title="Conexão"></span>
+        <span class="pill-status"><span class="dot-status" id="dot-status"></span><span id="txt-status">Conectado</span></span>
+        <button class="topo-btn" id="btn-menu" title="Menu" onclick="M.toggleMenu(true)">
+            <i class="fa-solid fa-gear"></i></button>
     </header>
 
     <div id="ptr" class="ptr"><i class="fa-solid fa-rotate"></i></div>
@@ -87,6 +81,37 @@
 
 <div id="toast" class="toast hidden"></div>
 <div id="splash-sync" class="splash-sync hidden"><i class="fa-solid fa-rotate fa-spin"></i> Sincronizando…</div>
+
+<!-- ===================== MENU LATERAL ===================== -->
+<div id="menu-veu" class="menu-veu" onclick="M.toggleMenu(false)"></div>
+<aside id="menu" class="menu"></aside>
+
+<!-- ===================== MODAL APARÊNCIA ===================== -->
+<div id="modal-ap" class="modal-veu" onclick="if(event.target===this)M.modalAparencia(false)">
+    <div class="modal-ap">
+        <div class="ap-head"><i class="fa-solid fa-palette" style="color:var(--prim)"></i>
+            <b>APARÊNCIA</b>
+            <button class="topo-btn" onclick="M.modalAparencia(false)"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <p class="ap-sub">Paleta de cores e fundo animado — aplica na hora</p>
+        <div class="ap-titulo">PALETA DE CORES</div>
+        <div class="ap-grid" id="ap-paletas"></div>
+        <div class="ap-titulo">FUNDO ANIMADO</div>
+        <div class="ap-grid" id="ap-fundos"></div>
+    </div>
+</div>
+
+<!-- ===================== LOCK BIOMÉTRICO ===================== -->
+<div id="bio-lock" class="bio-lock hidden">
+    <div class="login-anel"><svg viewBox="0 0 120 120">
+        <circle class="anel-ext" cx="60" cy="60" r="52" fill="none" stroke="url(#grad)" stroke-width="3" stroke-linecap="round" stroke-dasharray="240 90"/>
+        <circle class="anel-int" cx="60" cy="60" r="42" fill="none" stroke="#f59e0b55" stroke-width="2" stroke-dasharray="6 8"/>
+        <text x="60" y="70" text-anchor="middle" font-size="26" font-weight="800" fill="#f59e0b" font-family="Georgia, serif">SG</text>
+    </svg></div>
+    <button class="bio-btn" onclick="M.bioEntrar()"><i class="fa-solid fa-fingerprint"></i></button>
+    <p>Toque para desbloquear com a digital</p>
+    <button class="bio-alt" onclick="M.bioUsarSenha()">entrar com senha</button>
+</div>
 
 <script src="config.js"></script>
 <script src="app.js"></script>

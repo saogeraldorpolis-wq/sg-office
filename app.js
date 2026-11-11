@@ -13,20 +13,66 @@ const AKEY = window.SGO_CFG?.SUPABASE_KEY || '';
 const K_SESS = 'sgo_mob_sess';      // {access_token, refresh_token, usuario, user_id}
 const K_TEMA = 'sgo_mob_tema';
 const K_FUNDO = 'sgo_mob_fundo';
+const K_BIO = 'sgo_mob_bio';
+const K_DEV = 'sgo_mob_dev';
 
-/* tema (sacro|claro) + fundo (aura|estrelas|liso) — fixos por dispositivo */
+/* paletas e fundos — o 'sacro' e o padrao definido em :root */
+const PALETAS = [
+    { id: 'sacro',     nome: 'Dourado',   bg: '#0b1220', ac: '#f59e0b' },
+    { id: 'claro',     nome: 'Claro',     bg: '#faf7f2', ac: '#d97706' },
+    { id: 'noturno',   nome: 'Noturno',   bg: '#070d1c', ac: '#60a5fa' },
+    { id: 'oliva',     nome: 'Oliva',     bg: '#0d150a', ac: '#a3e635' },
+    { id: 'ametista',  nome: 'Ametista',  bg: '#120e1f', ac: '#a78bfa' },
+    { id: 'vinho',     nome: 'Vinho',     bg: '#1a0b12', ac: '#f472b6' },
+    { id: 'terracota', nome: 'Terracota', bg: '#180f08', ac: '#fb923c' },
+    { id: 'oceano',    nome: 'Oceano',    bg: '#08141c', ac: '#22d3ee' },
+];
+const FUNDOS = [
+    { id: 'linhas',   nome: 'Linhas',   ico: 'fa-water' },
+    { id: 'estrelas', nome: 'Estrelas', ico: 'fa-star' },
+    { id: 'malha',    nome: 'Malha',    ico: 'fa-border-all' },
+    { id: 'brasas',   nome: 'Brasas',   ico: 'fa-fire' },
+    { id: 'chuva',    nome: 'Chuva',    ico: 'fa-cloud-rain' },
+    { id: 'cordas',   nome: 'Cordas',   ico: 'fa-wave-square' },
+    { id: 'aura',     nome: 'Aura',     ico: 'fa-circle-half-stroke' },
+    { id: 'liso',     nome: 'Liso',     ico: 'fa-ban' },
+];
+
+/* tema (data-tema) + fundo (data-fundo) — fixos por dispositivo */
 function aplicarAparencia() {
-    const tema = localStorage.getItem(K_TEMA) || 'sacro';
-    const fundo = localStorage.getItem(K_FUNDO) || 'aura';
-    document.body.classList.toggle('claro', tema === 'claro');
-    document.body.dataset.fundo = fundo;
-    document.querySelectorAll('#seg-tema button').forEach(b =>
-        b.classList.toggle('on', b.dataset.t === tema));
-    document.querySelectorAll('#seg-fundo button').forEach(b =>
-        b.classList.toggle('on', b.dataset.f === fundo));
+    document.body.dataset.tema = localStorage.getItem(K_TEMA) || 'sacro';
+    document.body.dataset.fundo = localStorage.getItem(K_FUNDO) || 'linhas';
+    if ($('#modal-ap')?.classList.contains('aberto')) montarAparencia();
 }
 function setTema(t) { localStorage.setItem(K_TEMA, t); aplicarAparencia(); }
 function setFundo(f) { localStorage.setItem(K_FUNDO, f); aplicarAparencia(); }
+
+/* modal Aparência: grade de paletas + grade de fundos com seleção atual */
+function montarAparencia() {
+    const t = localStorage.getItem(K_TEMA) || 'sacro';
+    const f = localStorage.getItem(K_FUNDO) || 'linhas';
+    $('#ap-paletas').innerHTML = PALETAS.map(p => `
+        <button class="ap-sw ${p.id === t ? 'sel' : ''}" onclick="setTema('${p.id}')">
+            <span class="mini" style="background:${p.bg}">
+                <i class="fa-solid fa-circle" style="color:${p.ac}"></i></span>
+            ${p.nome}</button>`).join('');
+    $('#ap-fundos').innerHTML = FUNDOS.map(x => `
+        <button class="ap-tile ${x.id === f ? 'sel' : ''}" onclick="setFundo('${x.id}')">
+            <i class="fa-solid ${x.ico}"></i>${x.nome}</button>`).join('');
+}
+
+/* id único do aparelho (exibido em Sistema, como no SGE) */
+const DEV_ID = (() => {
+    let d = localStorage.getItem(K_DEV);
+    if (!d) { d = crypto.randomUUID(); localStorage.setItem(K_DEV, d); }
+    return d;
+})();
+
+/* helpers base64url p/ WebAuthn */
+const _b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const _unb64 = (s) => Uint8Array.from(
+    atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)).buffer;
 const K_ESCOPO = 'sgo_mob_escopo';  // admin: 'total'|'carteira'
 
 const $ = (s) => document.querySelector(s);
@@ -54,7 +100,10 @@ function toast(msg, erro) {
     clearTimeout(_toastT);
     _toastT = setTimeout(() => t.classList.add('hidden'), 3200);
 }
-const setStatus = (on) => { $('#dot-status').className = 'dot-status ' + (on ? 'on' : 'off'); };
+const setStatus = (on) => {
+    $('#dot-status').className = 'dot-status ' + (on ? 'on' : 'off');
+    const t = $('#txt-status'); if (t) t.textContent = on ? 'Conectado' : 'Offline';
+};
 const splashSync = (v) => $('#splash-sync').classList.toggle('hidden', !v);
 
 /* ---------- REST helpers ---------- */
@@ -203,10 +252,103 @@ const M = window.M = {
     sair(silencioso) {
         localStorage.removeItem(K_SESS);
         M.sess = null; M.usuario = null; M.dados = {};
+        M.toggleMenu(false);
+        $('#bio-lock').classList.add('hidden');
         $('#app').classList.add('hidden');
         $('#tela-login').classList.remove('hidden');
         if (!silencioso) toast('Sessão encerrada.');
     },
+
+    /* ---------- menu lateral + aparência ---------- */
+    toggleMenu(abrir) {
+        if (abrir) M.renderMenu();
+        $('#menu').classList.toggle('aberto', !!abrir);
+        $('#menu-veu').classList.toggle('aberto', !!abrir);
+    },
+    modalAparencia(abrir) {
+        if (abrir) montarAparencia();
+        $('#modal-ap').classList.toggle('aberto', !!abrir);
+    },
+    renderMenu() {
+        const u = M.usuario || {};
+        const bio = !!localStorage.getItem(K_BIO);
+        const tema = (PALETAS.find(p => p.id === document.body.dataset.tema) || {}).nome || '—';
+        const fundo = (FUNDOS.find(x => x.id === document.body.dataset.fundo) || {}).nome || '—';
+        const escopoCart = localStorage.getItem(K_ESCOPO) === 'carteira';
+        $('#menu').innerHTML = `
+        <div class="menu-user">
+            <div class="menu-avatar">${iniciais(u.nome)}</div>
+            <div style="flex:1;min-width:0">
+                <b style="display:block;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(u.nome || '—')}</b>
+                <span style="font-size:11px;color:var(--txt2)">${u.papel === 'admin' ? 'Administrador' : 'Colaborador'}</span>
+            </div>
+        </div>
+        ${u.papel === 'admin' ? `<div class="menu-sec"><div class="menu-sec-titulo">VISÃO</div>
+            <button class="menu-item" onclick="M.toggleEscopoMenu()"><i class="fa-solid fa-briefcase"></i>
+            Só minha carteira<small>${escopoCart ? 'ativado' : 'todas as empresas'}</small></button></div>` : ''}
+        <div class="menu-sec"><div class="menu-sec-titulo">APARÊNCIA</div>
+            <button class="menu-item" onclick="M.toggleMenu(false);M.modalAparencia(true)">
+            <i class="fa-solid fa-palette"></i>Tema e fundo<small>${tema} · ${fundo}</small></button></div>
+        <div class="menu-sec"><div class="menu-sec-titulo">CONTA</div>
+            <button class="menu-item" onclick="M.toggleMenu(false);M.aba('perfil')">
+            <i class="fa-solid fa-user"></i>Meu perfil</button>
+            ${window.PublicKeyCredential ? `
+            <button class="menu-item" onclick="M.toggleBio()"><i class="fa-solid fa-fingerprint"></i>
+            ${bio ? 'Desativar digital/FaceID' : 'Ativar digital/FaceID'}<small>${bio ? 'ativado' : ''}</small></button>` : ''}
+        </div>
+        <div class="menu-sec"><div class="menu-sec-titulo">SISTEMA</div>
+            <button class="menu-item" onclick="M.atualizarApp()"><i class="fa-solid fa-rotate"></i>Atualizar aplicativo</button>
+            <button class="menu-item" onclick="M.copiarDev()"><i class="fa-solid fa-mobile-screen"></i>ID do aparelho<small>${DEV_ID.slice(0, 8)}…</small></button>
+            <button class="menu-item" onclick="navigator.clipboard?.writeText('SGO Mobile v${VERSAO}');toast('Versão copiada.')">
+            <i class="fa-solid fa-code-branch"></i>SG Office Mobile<small>v${VERSAO}</small></button>
+            <button class="menu-item" onclick="M.sair()"><i class="fa-solid fa-right-from-bracket"></i>Sair da sessão</button>
+        </div>`;
+    },
+    toggleEscopoMenu() { M.toggleEscopo(); M.renderMenu(); },
+    copiarDev() { navigator.clipboard?.writeText(DEV_ID); toast('ID do aparelho copiado.'); },
+    async atualizarApp() {
+        toast('Procurando atualização…');
+        try { const r = await navigator.serviceWorker?.getRegistration(); await r?.update(); }
+        catch { /* offline */ }
+    },
+
+    /* ---------- biometria (WebAuthn platform: digital/FaceID) ---------- */
+    async toggleBio() {
+        if (localStorage.getItem(K_BIO)) {
+            localStorage.removeItem(K_BIO);
+            toast('Digital desativada neste aparelho.');
+            M.renderMenu();
+            return;
+        }
+        try {
+            const cred = await navigator.credentials.create({ publicKey: {
+                challenge: crypto.getRandomValues(new Uint8Array(32)),
+                rp: { name: 'SG Office' },
+                user: { id: crypto.getRandomValues(new Uint8Array(16)),
+                        name: M.sess?.email || 'usuario',
+                        displayName: M.usuario?.nome || 'Usuário' },
+                pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+                authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
+                timeout: 60000, attestation: 'none' } });
+            if (!cred) throw 0;
+            localStorage.setItem(K_BIO, _b64u(cred.rawId));
+            toast('Digital ativada! Na próxima abertura ela será pedida.');
+            M.renderMenu();
+        } catch { toast('Não foi possível ativar a digital.', true); }
+    },
+    async bioEntrar() {
+        try {
+            const id = _unb64(localStorage.getItem(K_BIO));
+            await navigator.credentials.get({ publicKey: {
+                challenge: crypto.getRandomValues(new Uint8Array(32)),
+                allowCredentials: [{ type: 'public-key', id }],
+                userVerification: 'required', timeout: 60000 } });
+            $('#bio-lock').classList.add('hidden');
+            $('#app').classList.remove('hidden');
+            await M.sincronizar(true);
+        } catch { /* cancelou ou falhou — permanece no lock */ }
+    },
+    bioUsarSenha() { M.sair(true); },
 
     /* ==================== DADOS ==================== */
     async carregar() {
@@ -362,10 +504,7 @@ const M = window.M = {
             localStorage.getItem(K_ESCOPO) === 'carteira' ? 'total' : 'carteira');
         M.render();
     },
-    toggleTema() {
-        setTema(document.body.classList.contains('claro') ? 'sacro' : 'claro');
-        M.render();
-    },
+    toggleTema() { M.modalAparencia(true); },
 };
 
 /* ---------- helpers de domínio ---------- */
@@ -376,6 +515,12 @@ const regimeVigente = (e, data) => {
 };
 const empNome = (id) => M.empresa(id)?.nome || '';
 const ativa = (e) => e.ativa !== false && String(e.ativa) !== 'false';
+const iniciais = (nome) => (nome || '?').trim().split(/\s+/).slice(0, 2)
+    .map(p => p[0]).join('').toUpperCase();
+const fmtCpf = (c) => {
+    const d = String(c || '').replace(/\D/g, '');
+    return d.length === 11 ? d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : (c || '');
+};
 
 /* itens unificados da aba Prazos (certidões + certificados + lembretes + guias) */
 function itensPrazo() {
@@ -430,26 +575,43 @@ const R = {
         const lemb = M.filtra('lembretes').filter(l => !l.concluido).length;
         const tar = M.filtra('tarefas').filter(t => (t.coluna || 'afazer') !== 'concluido').length;
         const proximos = itensPrazo().filter(i => (i.dias ?? 99) <= 15).slice(0, 8);
-        const esc = M.escopo();
-
+        const funcs = M.filtra('funcionarios').length;
+        const prox = itensPrazo()[0];
+        const admin = u.papel === 'admin';
         return `
-        <div class="saudacao">
-            <h2>${saud}, ${esc(u.nome?.split(' ')[0] || 'usuário')}!</h2>
-            <p>${esc ? `sua carteira · ${emps.length} empresa(s)` : `${emps.length} empresa(s) ativas`}</p>
+        <div class="hero">
+            <div class="hero-avatar">${iniciais(u.nome)}</div>
+            <div class="hero-info"><b>${esc(u.nome || '—')}</b>
+                <span>${fmtCpf(u.cpf)}</span><br>
+                <span class="hero-badge ${admin ? '' : 'colab'}">${admin ? 'ADMINISTRADOR' : 'COLABORADOR'}</span></div>
+            <button class="hero-sair" onclick="M.sair()">Sair</button>
         </div>
-        <div class="grid-cards">
-            <div class="mini-card" onclick="M.aba('empresas')">
-                <i class="fa-solid fa-building" style="color:#38bdf8"></i>
-                <b>${emps.length}</b><span>Empresas</span></div>
-            <div class="mini-card" onclick="M.aba('prazos')">
-                <i class="fa-solid fa-file-shield" style="color:#ef4444"></i>
-                <b>${certsV + certs15}</b><span>Certidões ≤15d</span></div>
-            <div class="mini-card" onclick="M.aba('prazos')">
-                <i class="fa-solid fa-certificate" style="color:#a78bfa"></i>
-                <b>${certifs15}</b><span>Certificados ≤15d</span></div>
-            <div class="mini-card" onclick="M.aba('tarefas')">
-                <i class="fa-solid fa-list-check" style="color:#f59e0b"></i>
-                <b>${tar}</b><span>Tarefas abertas</span></div>
+        <div class="ola"><b>${saud}, ${esc(u.nome?.split(' ')[0] || 'usuário')}!</b>
+            <p>O que você deseja gerenciar hoje?</p></div>
+        ${prox ? `
+        <div class="card-destaque" onclick="M.aba('prazos')">
+            <i class="fa-solid ${prox.icone}" style="color:${prox.cor}"></i>
+            <div class="cd-txt"><span>PRÓXIMO VENCIMENTO</span>
+                <b>${esc(prox.titulo)}</b>
+                <small>${esc(prox.sub || '')}</small></div>
+            ${pillData(prox.dias, prox.data)}
+        </div>` : `
+        <div class="card-destaque"><i class="fa-solid fa-circle-check" style="color:var(--ok)"></i>
+            <div class="cd-txt"><span>PRAZOS</span><b>Tudo em dia</b>
+            <small>nenhum vencimento próximo</small></div></div>`}
+        <div class="stats">
+            <div class="stat" onclick="M.aba('empresas')"><div class="stat-titulo">EMPRESAS</div>
+                <div class="stat-valor">${emps.length}</div>
+                <div class="stat-sub">ativas na visão atual</div></div>
+            <div class="stat"><div class="stat-titulo">FUNCIONÁRIOS</div>
+                <div class="stat-valor">${funcs}</div>
+                <div class="stat-sub">cadastrados</div></div>
+            <div class="stat" onclick="M.aba('prazos')"><div class="stat-titulo">PRAZOS ≤15 DIAS</div>
+                <div class="stat-valor">${certsV + certs15 + certifs15}</div>
+                <div class="stat-sub">certidões e certificados</div></div>
+            <div class="stat" onclick="M.aba('tarefas')"><div class="stat-titulo">TAREFAS ABERTAS</div>
+                <div class="stat-valor">${tar}</div>
+                <div class="stat-sub">pendentes no quadro</div></div>
         </div>
         <div class="card">
             <div class="card-head"><h3><i class="fa-solid fa-calendar-day"></i> Próximos vencimentos</h3>
@@ -613,10 +775,10 @@ const R = {
             <div class="linha-txt"><b>Ver só minha carteira</b>
             <span>${escopoCart ? `sim — ${nEmp} empresa(s)` : 'não — todas as empresas'}</span></div>
             <span class="switch ${escopoCart ? 'on' : ''}"></span></button>` : ''}
-        <button class="opcao" onclick="M.toggleTema()">
-            <i class="fa-solid fa-moon" style="color:#a78bfa"></i>
-            <div class="linha-txt"><b>Tema claro</b><span>alternar claro/escuro</span></div>
-            <span class="switch ${document.body.classList.contains('claro') ? 'on' : ''}"></span></button>
+        <button class="opcao" onclick="M.modalAparencia(true)">
+            <i class="fa-solid fa-palette" style="color:#a78bfa"></i>
+            <div class="linha-txt"><b>Tema e fundo</b><span>paleta de cores + fundo animado</span></div>
+            <i class="fa-solid fa-chevron-right seta"></i></button>
         <button class="opcao" onclick="M.sincronizar(true)">
             <i class="fa-solid fa-rotate" style="color:#38bdf8"></i>
             <div class="linha-txt"><b>Sincronizar agora</b><span>buscar dados mais recentes</span></div>
@@ -658,11 +820,6 @@ function itemLinha(i, podeLembrete) {
             location.reload();
         });
     }
-    document.querySelectorAll('#seg-tema button').forEach(b =>
-        b.onclick = () => setTema(b.dataset.t));
-    document.querySelectorAll('#seg-fundo button').forEach(b =>
-        b.onclick = () => setFundo(b.dataset.f));
-
     /* pull-to-refresh: arrasta no topo da lista → sincroniza */
     const c = $('#conteudo'), ptrEl = $('#ptr'), ptrIco = ptrEl.querySelector('i');
     let y0 = null, puxa = 0, ptrBusy = false;
@@ -734,9 +891,14 @@ function itemLinha(i, podeLembrete) {
         await M.sincronizar(true);
     }
 
-    // sessão persistida
+    // sessão persistida — com digital ativada, exige biometria antes de abrir
     try { M.sess = JSON.parse(localStorage.getItem(K_SESS)); } catch { M.sess = null; }
-    if (M.sess?.access_token) entrarNoApp();
+    if (M.sess?.access_token) {
+        if (localStorage.getItem(K_BIO) && window.PublicKeyCredential) {
+            $('#bio-lock').classList.remove('hidden');
+            setTimeout(() => M.bioEntrar(), 400);
+        } else entrarNoApp();
+    }
 
     // service worker
     if ('serviceWorker' in navigator) {
