@@ -7,7 +7,7 @@
  * ========================================================= */
 'use strict';
 
-const VERSAO = '1.3.8';
+const VERSAO = '1.3.9';
 const SUPA = (window.SGO_CFG?.SUPABASE_URL || '').replace(/\/$/, '');
 const AKEY = window.SGO_CFG?.SUPABASE_KEY || '';
 const K_SESS = 'sgo_mob_sess';      // {access_token, refresh_token, usuario, user_id}
@@ -106,23 +106,42 @@ const setStatus = (on) => {
 };
 const splashSync = (v) => $('#splash-sync').classList.toggle('hidden', !v);
 
+/* overlay de progresso da atualização (verificando → baixando → recarregando) */
+function updOverlay(msg) {
+    const o = $('#upd-overlay');
+    if (!o) return;
+    if (msg === null) { o.classList.add('hidden'); return; }
+    $('#upd-msg').textContent = msg;
+    o.classList.remove('hidden');
+}
+
 /* cheque determinístico de versão — compara VERSAO local c/ o versao.json
    da rede (sem cache) — usado no boot e no botão "Atualizar aplicativo".
-   Retorna true (vai recarregar), false (já atualizado) ou null (offline). */
+   Retorna true (vai recarregar), false (já atualizado) ou null (offline).
+   O guarda sgo_vtry guarda "versao|timestamp": só bloqueia retry da mesma
+   versão por 3 min (janela do CDN do Pages propagar), nunca pra sempre. */
 async function checarVersao(forcar) {
     try {
         const j = await fetch('versao.json', { cache: 'no-store' })
             .then(r => r.ok ? r.json() : null);
         if (!j || j.versao === VERSAO) return false;
-        if (!forcar && sessionStorage.getItem('sgo_vtry') === j.versao) return false;
-        sessionStorage.setItem('sgo_vtry', j.versao);
+        const tent = (sessionStorage.getItem('sgo_vtry') || '').split('|');
+        if (!forcar && tent[0] === j.versao && Date.now() - (+tent[1] || 0) < 180000)
+            return false;
+        sessionStorage.setItem('sgo_vtry', `${j.versao}|${Date.now()}`);
+        updOverlay(`Nova versão v${j.versao} — atualizando…`);
         try {
             const reg = await navigator.serviceWorker?.getRegistration();
             await reg?.update();
+            /* dá 4s p/ o SW novo assumir (controllerchange já recarrega) */
+            await new Promise(r => setTimeout(r, 4000));
+            /* CDN ainda velho? limpa tudo e recarrega furando o cache */
+            if (caches) for (const k of await caches.keys()) await caches.delete(k);
+            await reg?.unregister();
         } catch { /* sem SW */ }
-        location.reload();
+        location.href = location.pathname + '?u=' + Date.now();
         return true;
-    } catch { return null; }
+    } catch { updOverlay(null); return null; }
 }
 
 /* ---------- REST helpers ---------- */
@@ -341,10 +360,11 @@ const M = window.M = {
     toggleEscopoMenu() { M.toggleEscopo(); M.renderMenu(); },
     copiarDev() { navigator.clipboard?.writeText(DEV_ID); toast('ID do aparelho copiado.'); },
     async atualizarApp() {
-        toast('Procurando atualização…');
+        updOverlay('Verificando atualização…');
         const r = await checarVersao(true);
-        if (r === false) toast(`Já está na versão mais recente (v${VERSAO}).`);
-        else if (r === null) toast('Sem conexão para verificar.', true);
+        if (r === false) { updOverlay(null); toast(`Já está na versão mais recente (v${VERSAO}).`); }
+        else if (r === null) { updOverlay(null); toast('Sem conexão para verificar.', true); }
+        /* r === true → overlay continua visível até o reload */
     },
 
     /* ---------- biometria (WebAuthn platform: digital/FaceID) ---------- */
@@ -1131,7 +1151,7 @@ function itemLinha(i, podeLembrete) {
     /* cheque de versão no boot — o SW register/update fica no fim do boot */
     checarVersao();
     /* pill Conectado/Offline acompanha a rede em tempo real */
-    window.addEventListener('online', () => { setStatus(true); if (M.sessao) M.sincronizar(); });
+    window.addEventListener('online', () => { setStatus(true); if (M.sess) M.sincronizar(); });
     window.addEventListener('offline', () => setStatus(false));
     setStatus(navigator.onLine);
     /* pull-to-refresh: arrasta no topo da lista → sincroniza */
@@ -1216,7 +1236,7 @@ function itemLinha(i, podeLembrete) {
 
     // service worker
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('sw.js').then(reg => {
+        navigator.serviceWorker.register('sw.js?v=' + VERSAO).then(reg => {
             reg.update();
             navigator.serviceWorker.addEventListener('controllerchange', () => {
                 if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName))

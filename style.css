@@ -583,3 +583,19 @@ body[data-tema="claro"] .pill.info { color: #0284c7; }
     .anel-ext, .anel-int, .bio-anel, .ptr.gira i { animation: none !important; }
     .card, .hero, .ola, .stats, .linha, .sheet { animation-duration: .01ms !important; }
 }
+
+/* overlay de progresso da atualização de versão */
+.upd-overlay {
+    position: fixed; inset: 0; z-index: 200;
+    display: flex; align-items: center; justify-content: center;
+    background: color-mix(in srgb, var(--bg) 78%, transparent);
+    backdrop-filter: blur(6px);
+}
+.upd-card {
+    display: flex; align-items: center; gap: 14px;
+    background: var(--card); border: 1px solid var(--borda);
+    border-radius: 18px; padding: 20px 26px; box-shadow: var(--sombra);
+    animation: fadeUp .3s both;
+}
+.upd-card i { font-size: 22px; color: var(--prim); }
+.upd-card b { font-size: 14px; font-weight: 600; }
