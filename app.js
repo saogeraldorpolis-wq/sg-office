@@ -7,7 +7,7 @@
  * ========================================================= */
 'use strict';
 
-const VERSAO = '1.3.3';
+const VERSAO = '1.3.4';
 const SUPA = (window.SGO_CFG?.SUPABASE_URL || '').replace(/\/$/, '');
 const AKEY = window.SGO_CFG?.SUPABASE_KEY || '';
 const K_SESS = 'sgo_mob_sess';      // {access_token, refresh_token, usuario, user_id}
@@ -234,19 +234,28 @@ const M = window.M = {
 
     async renovar() {
         if (!M.sess?.refresh_token) return false;
+        let r;
         try {
-            const r = await fetch(`${SUPA}/auth/v1/token?grant_type=refresh_token`, {
+            r = await fetch(`${SUPA}/auth/v1/token?grant_type=refresh_token`, {
                 method: 'POST',
                 headers: { apikey: AKEY, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ refresh_token: M.sess.refresh_token })
             });
-            const j = await r.json();
-            if (!r.ok) throw 0;
-            M.sess.access_token = j.access_token;
-            M.sess.refresh_token = j.refresh_token || M.sess.refresh_token;
-            localStorage.setItem(K_SESS, JSON.stringify(M.sess));
-            return true;
-        } catch { M.sair(true); return false; }
+        } catch { return false; }   // falha de rede: mantém a sessão (offline)
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) {
+            // refresh_token realmente morto → única hora de derrubar a sessão
+            if (r.status === 400 || r.status === 401) {
+                M.sair(true);
+                const e = $('#login-erro');
+                if (e) { e.textContent = 'Sua sessão expirou — entre com a senha.'; e.classList.remove('hidden'); }
+            }
+            return false;
+        }
+        M.sess.access_token = j.access_token;
+        M.sess.refresh_token = j.refresh_token || M.sess.refresh_token;
+        localStorage.setItem(K_SESS, JSON.stringify(M.sess));
+        return true;
     },
 
     sair(silencioso) {
