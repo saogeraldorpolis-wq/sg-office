@@ -2,7 +2,7 @@
  * Network-first no shell; NUNCA intercepta chamadas ao Supabase
  * (auth/rest/realtime passam direto, sem cache).
  */
-const CACHE = 'sgo-mob-v4';
+const CACHE = 'sgo-mob-v5';
 const SHELL = [
     './',
     './index.html',

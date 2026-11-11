@@ -135,9 +135,27 @@ const M = window.M = {
     _emp: null,          // empresa aberta no detalhe
 
     /* ==================== AUTH ==================== */
+    /* resolve a entrada (usuário / CPF / e-mail) no e-mail do Supabase Auth
+       via RPC sgo_login_email (migration 006) — igual ao /api/login do
+       desktop, que aceita usuário, e-mail e CPF. */
+    async _emailDoLogin(usuario) {
+        const u = usuario.trim();
+        if (u.includes('@')) return u;
+        try {
+            const r = await fetch(`${SUPA}/rest/v1/rpc/sgo_login_email`, {
+                method: 'POST',
+                headers: { apikey: AKEY, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ p_login: u })
+            });
+            if (r.ok) return await r.json();       // e-mail ou null
+        } catch { /* sem rede/RPC: cai no fallback */ }
+        // fallback (RPC ausente): mesma regra sintética do desktop
+        return `${u.replace(/[^\w.+-]/g, '').toLowerCase()}@sgoffice.local`;
+    },
+
     async login(usuario, senha) {
-        const email = usuario.includes('@') ? usuario.trim()
-            : `${usuario.trim().replace(/[^\w.+-]/g, '').toLowerCase()}@sgoffice.local`;
+        const email = await M._emailDoLogin(usuario);
+        if (!email) throw new Error('Usuário ou senha inválidos.');
         const r = await fetch(`${SUPA}/auth/v1/token?grant_type=password`, {
             method: 'POST',
             headers: { apikey: AKEY, 'Content-Type': 'application/json' },
