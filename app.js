@@ -7,7 +7,7 @@
  * ========================================================= */
 'use strict';
 
-const VERSAO = '1.3.6';
+const VERSAO = '1.3.7';
 const SUPA = (window.SGO_CFG?.SUPABASE_URL || '').replace(/\/$/, '');
 const AKEY = window.SGO_CFG?.SUPABASE_KEY || '';
 const K_SESS = 'sgo_mob_sess';      // {access_token, refresh_token, usuario, user_id}
@@ -156,6 +156,12 @@ const TABELAS = {
     fiscal_status: ['fiscal_status', {
         empresa_id: 'empresa_id', competencia: 'competencia',
         obrigacao_id: 'obrigacao_id', status: 'status', por: 'por', em: 'em' }],
+    folha_fechamentos: ['folha_fechamentos', {
+        empresa_id: 'empresa_id', competencia: 'competencia',
+        status: 'status', por: 'por', em: 'em' }],
+    bi_mensal: ['bi_mensal', {
+        empresa_id: 'empresa_id', competencia: 'competencia',
+        faturamento: 'faturamento', funcionarios: 'funcionarios' }],
     situacao_fiscal: ['situacao_fiscal', {
         empresa_id: 'empresa_id', origem: 'origem', situacao: 'situacao',
         regime: 'regime', diagnostico: 'diagnostico',
@@ -639,6 +645,10 @@ const R = {
         const funcs = M.filtra('funcionarios').length;
         const prox = itensPrazo()[0];
         const admin = u.papel === 'admin';
+        const ano = String(new Date().getFullYear());
+        const fatAno = M.filtra('bi_mensal')
+            .filter(x => String(x.competencia || '').startsWith(ano))
+            .reduce((s, x) => s + (+x.faturamento || 0), 0);
         return `
         <div class="hero">
             <div class="hero-avatar">${iniciais(u.nome)}</div>
@@ -670,10 +680,17 @@ const R = {
             <div class="stat" onclick="M.aba('prazos')"><div class="stat-titulo">PRAZOS ≤15 DIAS</div>
                 <div class="stat-valor">${certsV + certs15 + certifs15}</div>
                 <div class="stat-sub">certidões e certificados</div></div>
-            <div class="stat" onclick="M.aba('tarefas')"><div class="stat-titulo">TAREFAS ABERTAS</div>
+            <div class="stat" onclick="M.aba('prazos')"><div class="stat-titulo">TAREFAS ABERTAS</div>
                 <div class="stat-valor">${tar}</div>
                 <div class="stat-sub">pendentes no quadro</div></div>
         </div>
+        ${fatAno > 0 ? `
+        <div class="card-destaque" onclick="M.panSub('bi')">
+            <i class="fa-solid fa-chart-column" style="color:#f59e0b"></i>
+            <div class="cd-txt"><span>FATURAMENTO DA CARTEIRA · ${ano}</span>
+                <b>${fmtMoeda(fatAno)}</b>
+                <small>toque para abrir o BI</small></div>
+        </div>` : ''}
         <div class="card">
             <div class="card-head"><h3><i class="fa-solid fa-calendar-day"></i> Próximos vencimentos</h3>
                 <button class="link" onclick="M.aba('prazos')">ver todos</button></div>
