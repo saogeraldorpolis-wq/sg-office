@@ -651,6 +651,42 @@ function itemLinha(i, podeLembrete) {
     document.querySelectorAll('#seg-fundo button').forEach(b =>
         b.onclick = () => setFundo(b.dataset.f));
 
+    /* pull-to-refresh: arrasta no topo da lista → sincroniza */
+    const c = $('#conteudo'), ptrEl = $('#ptr'), ptrIco = ptrEl.querySelector('i');
+    let y0 = null, puxa = 0, ptrBusy = false;
+    const ptrFim = () => {
+        ptrEl.classList.remove('gira');
+        ptrEl.style.transform = 'translateY(-75px)';
+        ptrEl.style.opacity = 0;
+        ptrIco.style.transform = '';
+    };
+    c.addEventListener('touchstart', (e) => {
+        if (c.scrollTop <= 0 && !ptrBusy) { y0 = e.touches[0].clientY; puxa = 0; }
+    }, { passive: true });
+    c.addEventListener('touchmove', (e) => {
+        if (y0 == null) return;
+        const d = e.touches[0].clientY - y0;
+        if (d <= 0 || c.scrollTop > 0) { y0 = null; ptrFim(); return; }
+        e.preventDefault();
+        puxa = Math.min(d * .55, 90);            // resistência elástica
+        ptrEl.style.transition = 'none';
+        ptrEl.style.transform = `translateY(${puxa - 75}px)`;
+        ptrEl.style.opacity = Math.min(puxa / 55, 1);
+        ptrIco.style.transform = `rotate(${puxa * 4}deg)`;
+    }, { passive: false });
+    c.addEventListener('touchend', () => {
+        if (y0 == null) return;
+        y0 = null;
+        ptrEl.style.transition = '';
+        if (puxa >= 60) {
+            ptrBusy = true;
+            ptrEl.classList.add('gira');
+            ptrEl.style.transform = 'translateY(0)';
+            ptrEl.style.opacity = 1;
+            Promise.resolve(M.sincronizar(true)).finally(() => { ptrBusy = false; ptrFim(); });
+        } else ptrFim();
+    });
+
     // máscara de CPF no login: só formata quando a entrada é só dígitos
     $('#l-usuario').addEventListener('input', (ev) => {
         const v = ev.target.value;
