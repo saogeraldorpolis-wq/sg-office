@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0b1220">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>SG Office Mobile</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ===================== LOGIN ===================== -->
+<div id="tela-login" class="tela-login">
+    <div class="login-anel"><svg viewBox="0 0 120 120">
+        <defs><linearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#f59e0b"/><stop offset="1" stop-color="#d97706"/>
+        </linearGradient></defs>
+        <circle class="anel-ext" cx="60" cy="60" r="52" fill="none" stroke="url(#grad)" stroke-width="3" stroke-linecap="round" stroke-dasharray="240 90"/>
+        <circle class="anel-int" cx="60" cy="60" r="42" fill="none" stroke="#f59e0b55" stroke-width="2" stroke-dasharray="6 8"/>
+        <text x="60" y="70" text-anchor="middle" font-size="26" font-weight="800" fill="#f59e0b" font-family="Georgia, serif">SG</text>
+    </svg></div>
+    <div class="login-card">
+        <h1>SG Office</h1>
+        <p class="login-sub">Escritório São Geraldo · acesso móvel</p>
+        <form id="form-login" autocomplete="off">
+            <div class="campo"><i class="fa-solid fa-user"></i>
+                <input id="l-usuario" placeholder="Usuário ou e-mail" autocomplete="username" required></div>
+            <div class="campo"><i class="fa-solid fa-lock"></i>
+                <input id="l-senha" type="password" placeholder="Senha" autocomplete="current-password" required></div>
+            <div id="login-erro" class="login-erro hidden"></div>
+            <button type="submit" class="btn-entrar" id="btn-entrar">
+                <span>Entrar</span><i class="fa-solid fa-arrow-right"></i></button>
+        </form>
+        <p class="login-versao">SG Office Mobile · v<span id="v-login">1.0</span></p>
+    </div>
+</div>
+
+<!-- ===================== APP ===================== -->
+<div id="app" class="hidden">
+    <header class="topo">
+        <div class="topo-logo"><i class="fa-solid fa-briefcase"></i></div>
+        <div class="topo-titulo">
+            <strong id="topo-titulo">Início</strong>
+            <span id="topo-sub">SG Office</span>
+        </div>
+        <button class="topo-btn" id="btn-sync" title="Sincronizar" onclick="M.sincronizar(true)">
+            <i class="fa-solid fa-rotate"></i></button>
+        <span class="dot-status" id="dot-status" title="Conexão"></span>
+    </header>
+
+    <main id="conteudo" class="conteudo"></main>
+
+    <nav class="nav-inferior">
+        <button class="nav-btn ativo" data-aba="inicio" onclick="M.aba('inicio')">
+            <i class="fa-solid fa-chart-simple"></i><span>Início</span></button>
+        <button class="nav-btn" data-aba="empresas" onclick="M.aba('empresas')">
+            <i class="fa-solid fa-building"></i><span>Empresas</span></button>
+        <button class="nav-btn" data-aba="prazos" onclick="M.aba('prazos')">
+            <i class="fa-solid fa-calendar-day"></i><span>Prazos</span>
+            <em class="nav-badge hidden" id="badge-prazos"></em></button>
+        <button class="nav-btn" data-aba="tarefas" onclick="M.aba('tarefas')">
+            <i class="fa-solid fa-list-check"></i><span>Tarefas</span>
+            <em class="nav-badge hidden" id="badge-tarefas"></em></button>
+        <button class="nav-btn" data-aba="perfil" onclick="M.aba('perfil')">
+            <i class="fa-solid fa-circle-user"></i><span>Perfil</span></button>
+    </nav>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+<div id="splash-sync" class="splash-sync hidden"><i class="fa-solid fa-rotate fa-spin"></i> Sincronizando…</div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
