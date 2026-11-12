@@ -7,7 +7,7 @@
  * ========================================================= */
 'use strict';
 
-const VERSAO = '1.3.17';
+const VERSAO = '--help';
 const SUPA = (window.SGO_CFG?.SUPABASE_URL || '').replace(/\/$/, '');
 const AKEY = window.SGO_CFG?.SUPABASE_KEY || '';
 const K_SESS = 'sgo_mob_sess';      // {access_token, refresh_token, usuario, user_id}
@@ -752,13 +752,13 @@ const R = {
             <p>O que você deseja gerenciar hoje?</p></div>
         ${prox ? `
         <div class="card-destaque" onclick="M.aba('prazos')">
-            <i class="fa-solid ${prox.icone}" style="color:${prox.cor}"></i>
+            <span class="ic" style="color:${prox.cor}"><i class="fa-solid ${prox.icone}"></i></span>
             <div class="cd-txt"><span>PRÓXIMO VENCIMENTO</span>
                 <b>${esc(prox.titulo)}</b>
                 <small>${esc(prox.sub || '')}</small></div>
             ${pillData(prox.dias, prox.data)}
         </div>` : `
-        <div class="card-destaque"><i class="fa-solid fa-circle-check" style="color:var(--ok)"></i>
+        <div class="card-destaque"><span class="ic" style="color:var(--ok)"><i class="fa-solid fa-circle-check"></i></span>
             <div class="cd-txt"><span>PRAZOS</span><b>Tudo em dia</b>
             <small>nenhum vencimento próximo</small></div></div>`}
         <div class="stats">
@@ -777,7 +777,7 @@ const R = {
         </div>
         ${fatAno > 0 ? `
         <div class="card-destaque" onclick="M.panSub('bi')">
-            <i class="fa-solid fa-chart-column" style="color:#f59e0b"></i>
+            <span class="ic" style="color:#f59e0b"><i class="fa-solid fa-chart-column"></i></span>
             <div class="cd-txt"><span>FATURAMENTO DA CARTEIRA · ${ano}</span>
                 <b>${fmtMoeda(fatAno)}</b>
                 <small>toque para abrir o BI</small></div>
@@ -805,7 +805,7 @@ const R = {
                 .toLowerCase().includes(M._busca))
             .sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
         return `${lista.length === 0 ? '<div class="vazio"><i class="fa-regular fa-building"></i> Nenhuma empresa no escopo.</div>'
-            : lista.map(e => {
+            : '<div class="card lista-emp">' + lista.map(e => {
                 const ncert = M.cole('certidoes').filter(c => c.empresa_id === e.id
                     && (diasPara(c.vencimento) ?? 99) <= 15).length;
                 return `<button class="linha-emp ${!ativa(e) ? 'inativa' : ''}" onclick="M.abrirEmpresa('${e.id}')">
@@ -816,7 +816,7 @@ const R = {
                     </div>
                     ${ncert ? `<span class="pill vencido">${ncert}</span>` : ''}
                     <i class="fa-solid fa-chevron-right seta"></i>
-                </button>`;}).join('')}`;
+                </button>`;}).join('') + '</div>'}`;
     },
 
     empresaDetalhe(id) {
@@ -849,6 +849,7 @@ const R = {
         <div class="card emp-cab">
             <h2>${esc(e.nome)}</h2>
             <p>${esc(e.cnpj || 'sem CNPJ')}${e.municipio ? ' · ' + esc(e.municipio) + '/' + esc(e.uf || '') : ''}</p>
+            ${e.endereco ? `<p>${esc([e.endereco, e.numero].filter(Boolean).join(', '))}${e.bairro ? ' — ' + esc(e.bairro) : ''}</p>` : ''}
             <div class="pills">
                 <span class="pill ${ativa(e) ? 'ok' : 'neutro'}">${ativa(e) ? 'ativa' : 'inativa'}</span>
                 <span class="pill info">${esc(regimeVigente(e))}</span>
@@ -909,7 +910,7 @@ const R = {
             <div class="card-head"><h3><i class="fa-solid fa-file-shield"></i> Certidões</h3></div>
             ${certs.length === 0 ? '<div class="vazio">Nenhuma registrada.</div>'
                 : certs.map(c => `<div class="linha">
-                    <i class="fa-solid fa-file-shield" style="color:#38bdf8"></i>
+                    <span class="ic ic-sm" style="color:#38bdf8"><i class="fa-solid fa-file-shield"></i></span>
                     <div class="linha-txt"><b>${esc(c.tipo)}</b><span>${c.pendente ? 'com pendências' : (c.numero ? 'nº ' + esc(c.numero) : '')}${c.via_matriz ? ' · via matriz' : ''}</span></div>
                     ${pillData(diasPara(c.vencimento), c.vencimento)}</div>`).join('')}
         </div>
@@ -917,7 +918,7 @@ const R = {
             <div class="card-head"><h3><i class="fa-solid fa-certificate"></i> Certificados digitais</h3></div>
             ${certifs.length === 0 ? '<div class="vazio">Nenhum registrado.</div>'
                 : certifs.map(c => `<div class="linha">
-                    <i class="fa-solid fa-certificate" style="color:#a78bfa"></i>
+                    <span class="ic ic-sm" style="color:#a78bfa"><i class="fa-solid fa-certificate"></i></span>
                     <div class="linha-txt"><b>${esc(c.tipo || 'e-CNPJ')}</b><span>${esc(c.titular || '')}</span></div>
                     ${pillData(diasPara(c.vencimento), c.vencimento)}</div>`).join('')}
         </div>
@@ -930,7 +931,7 @@ const R = {
         </div>` : ''}
         ${hist.length ? `<div class="card">
             <div class="card-head"><h3><i class="fa-solid fa-clock-rotate-left"></i> Histórico de regime</h3></div>
-            ${hist.map(r => `<div class="linha"><i class="fa-solid fa-bookmark" style="color:#f59e0b"></i>
+            ${hist.map(r => `<div class="linha"><span class="ic ic-sm" style="color:#f59e0b"><i class="fa-solid fa-bookmark"></i></span>
                 <div class="linha-txt"><b>${esc(r.regime)}</b><span>${fmtData(r.inicio)} → ${r.fim ? fmtData(r.fim) : 'atual'}</span></div></div>`).join('')}
         </div>` : ''}`;
     },
@@ -979,7 +980,7 @@ const R = {
                         : pend.length === 0
                             ? '<div class="vazio"><i class="fa-regular fa-circle-check"></i> Tudo entregue.</div>'
                             : pend.map(r => `<div class="linha">
-                                <i class="fa-solid fa-hourglass-half" style="color:var(--perigo)"></i>
+                                <span class="ic ic-sm" style="color:var(--perigo)"><i class="fa-solid fa-hourglass-half"></i></span>
                                 <div class="linha-txt"><b>${esc(empNome(r.empresa_id))}</b>
                                 <span>pendente${r.por ? ' · ' + esc(r.por) : ''}</span></div></div>`).join('')}
                 </div>`;
@@ -1016,14 +1017,14 @@ const R = {
         </div>
         ${rows.length === 0
             ? '<div class="vazio"><i class="fa-regular fa-calendar-check"></i> Nenhum fechamento nesta competência.</div>'
-            : rows.map(r => {
+            : '<div class="card lista-emp">' + rows.map(r => {
                 const ok = (r.status || 'pendente') === 'fechado';
                 return `<div class="linha">
-                    <i class="fa-solid ${ok ? 'fa-circle-check' : 'fa-hourglass-half'}" style="color:${ok ? 'var(--ok)' : 'var(--perigo)'}"></i>
+                    <span class="ic ic-sm" style="color:${ok ? 'var(--ok)' : 'var(--perigo)'}"><i class="fa-solid ${ok ? 'fa-circle-check' : 'fa-hourglass-half'}"></i></span>
                     <div class="linha-txt"><b>${esc(empNome(r.empresa_id))}</b>
                     <span>${nAtivos(r.empresa_id)} funcionário(s)${r.por ? ' · ' + esc(r.por) : ''}</span></div>
                     <span class="pill ${ok ? 'ok' : 'atencao'}">${esc(r.status || 'pendente')}</span></div>`;
-            }).join('')}`;
+            }).join('') + '</div>'}`;
     },
 
     situacao() {
@@ -1080,11 +1081,11 @@ const R = {
 
         if (M._sfSub === 'cob') {
             return panorama + `<p class="ap-sub" style="margin:0 2px 10px">Empresas da carteira sem demonstrativo importado — toque para abrir a ficha.</p>` +
-                (semRel.length ? semRel.map(e => `<button class="linha-emp" onclick="M.abrirEmpresa('${e.id}')">
+                (semRel.length ? '<div class="card lista-emp">' + semRel.map(e => `<button class="linha-emp" onclick="M.abrirEmpresa('${e.id}')">
                     <div class="linha-ico"><i class="fa-solid fa-building"></i></div>
                     <div class="linha-txt"><b>${esc(e.nome)}</b><span>${esc(e.cnpj || '—')} · ${esc(regimeVigente(e))}</span></div>
                     <span class="pill vencido">sem relatório</span>
-                    <i class="fa-solid fa-chevron-right seta"></i></button>`).join('')
+                    <i class="fa-solid fa-chevron-right seta"></i></button>`).join('') + '</div>'
                 : '<div class="vazio"><i class="fa-solid fa-circle-check"></i> Todas as empresas da carteira têm demonstrativo.</div>');
         }
 
@@ -1106,13 +1107,14 @@ const R = {
             const linFed = rec ? `Federal/Receita: ${rec.diagnostico === 'limpa' ? 'sem pendências'
                 : (rec.qtd_debitos ?? (rec.pendencias || []).length ?? 0) + ' pendência(s)'}` : '';
             return `<button class="linha-emp" onclick="M.sfDet('${eid}')">
-                <div class="linha-ico"><i class="fa-solid fa-scale-balanced"></i></div>
+                <div class="linha-ico" style="color:#a78bfa"><i class="fa-solid fa-scale-balanced"></i></div>
                 <div class="linha-txt"><b>${esc(s?.nome_doc || empNome(eid))}</b>
                     <span>${[linEst, linFed].filter(Boolean).join('<br>') || esc(sit || '—')}</span></div>
                 <span class="pill ${ok ? 'ok' : 'vencido'}">${esc(sit || '—')}</span>
                 <i class="fa-solid fa-chevron-right seta"></i></button>`;
         }).join('');
-        return panorama + `<p class="ap-sub" style="margin:0 2px 10px">Toque na empresa para ver o detalhamento por ente — Estadual (DSOT) e Federal (Receita/PGFN).</p>` + cards;
+        return panorama + `<p class="ap-sub" style="margin:0 2px 10px">Toque na empresa para ver o detalhamento por ente — Estadual (DSOT) e Federal (Receita/PGFN).</p>`
+            + `<div class="card lista-emp">${cards}</div>`;
     },
 
     /* detalhe por empresa — mesmas separações do desktop:
@@ -1232,7 +1234,7 @@ const R = {
         const certs = M.filtra('certidoes');
         const certifs = M.filtra('certificados');
         const li = (icone, cor, titulo, sub, venc) => `<div class="linha">
-            <i class="fa-solid ${icone}" style="color:${cor}"></i>
+            <span class="ic ic-sm" style="color:${cor}"><i class="fa-solid ${icone}"></i></span>
             <div class="linha-txt"><b>${esc(titulo)}</b><span>${sub}</span></div>
             ${pillData(diasPara(venc), venc)}</div>`;
         return `
@@ -1312,7 +1314,7 @@ const R = {
         <div class="chips">${chips.map(([v, n]) =>
             `<button class="chip ${f === v ? 'on' : ''}" onclick="M.prazoF('${v}')">${n}</button>`).join('')}</div>
         ${lista.length === 0 ? '<div class="vazio"><i class="fa-regular fa-calendar-check"></i> Nada por aqui.</div>'
-            : lista.map(i => itemLinha(i, pode)).join('')}`;
+            : '<div class="card lista-emp">' + lista.map(i => itemLinha(i, pode)).join('') + '</div>'}`;
     },
 
     tarefas() {
@@ -1327,7 +1329,7 @@ const R = {
             <button class="chip ${M._tarefasF === 'feitas' ? 'on' : ''}" onclick="M.tarefasF('feitas')">Concluídas (${feitas.length})</button>
         </div>
         ${lista.length === 0 ? '<div class="vazio"><i class="fa-regular fa-circle-check"></i> Nenhuma tarefa.</div>'
-            : lista.map(t => {
+            : '<div class="card lista-emp">' + lista.map(t => {
                 const d = diasPara(t.prazo);
                 const atrasada = d !== null && d < 0 && (t.coluna || 'afazer') !== 'concluido';
                 const feita = (t.coluna || 'afazer') === 'concluido';
@@ -1342,7 +1344,7 @@ const R = {
                                 .filter(Boolean).map(esc).join(' · ')}</span>
                     </div>
                     ${atrasada ? '<span class="pill vencido">atrasada</span>' : ''}
-                </div>`;}).join('')}`;
+                </div>`;}).join('') + '</div>'}`;
     },
 
     perfil() {
@@ -1355,24 +1357,26 @@ const R = {
             <div><h2>${esc(u.nome || M.sess?.usuario)}</h2>
             <p>${esc({ admin: 'Administrador', gerente: 'Gerente', operador: 'Operador', colaborador: 'Colaborador' }[u.papel] || u.papel || '')}</p></div>
         </div>
+        <div class="card lista-emp">
         ${u.papel === 'admin' && Array.isArray(u.empresas) ? `
         <button class="opcao" onclick="M.toggleEscopo()">
-            <i class="fa-solid fa-briefcase" style="color:#f59e0b"></i>
+            <span class="ic ic-sm" style="color:#f59e0b"><i class="fa-solid fa-briefcase"></i></span>
             <div class="linha-txt"><b>Ver só minha carteira</b>
             <span>${escopoCart ? `sim — ${nEmp} empresa(s)` : 'não — todas as empresas'}</span></div>
             <span class="switch ${escopoCart ? 'on' : ''}"></span></button>` : ''}
         <button class="opcao" onclick="M.modalAparencia(true)">
-            <i class="fa-solid fa-palette" style="color:#a78bfa"></i>
+            <span class="ic ic-sm" style="color:#a78bfa"><i class="fa-solid fa-palette"></i></span>
             <div class="linha-txt"><b>Tema e fundo</b><span>paleta de cores + fundo animado</span></div>
             <i class="fa-solid fa-chevron-right seta"></i></button>
         <button class="opcao" onclick="M.sincronizar(true)">
-            <i class="fa-solid fa-rotate" style="color:#38bdf8"></i>
+            <span class="ic ic-sm" style="color:#38bdf8"><i class="fa-solid fa-rotate"></i></span>
             <div class="linha-txt"><b>Sincronizar agora</b><span>buscar dados mais recentes</span></div>
             <i class="fa-solid fa-chevron-right seta"></i></button>
         <button class="opcao" onclick="M.sair()">
-            <i class="fa-solid fa-right-from-bracket" style="color:#ef4444"></i>
+            <span class="ic ic-sm" style="color:#ef4444"><i class="fa-solid fa-right-from-bracket"></i></span>
             <div class="linha-txt"><b>Sair da conta</b><span>encerrar sessão neste aparelho</span></div>
             <i class="fa-solid fa-chevron-right seta"></i></button>
+        </div>
         <p class="versao-rodape" onclick="navigator.clipboard?.writeText('SGO Mobile v${VERSAO}');toast('Versão copiada.')">
             SG Office Mobile · v${VERSAO}</p>`;
     },
@@ -1522,7 +1526,7 @@ function _sfChart(mk, grid, moeda) {
 /* linha genérica de item de prazo */
 function itemLinha(i, podeLembrete) {
     return `<div class="linha">
-        <i class="fa-solid ${i.icone}" style="color:${i.cor}"></i>
+        <span class="ic" style="color:${i.cor}"><i class="fa-solid ${i.icone}"></i></span>
         <div class="linha-txt"><b>${esc(i.titulo)}</b><span>${esc(i.sub || '')}</span></div>
         ${i.pendente ? '<span class="pill atencao">pendência</span>' : ''}
         ${i.lembrete && podeLembrete

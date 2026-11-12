@@ -277,8 +277,9 @@ body:has(> #app:not(.hidden)) > .bio-lock { display: none !important; }
     flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 3px; color: var(--txt3); font-size: 10.5px; position: relative;
 }
-.nav-btn i { font-size: 18px; }
+.nav-btn i { font-size: 18px; padding: 5px 14px; border-radius: 999px; transition: background .2s; }
 .nav-btn.ativo { color: var(--prim); }
+.nav-btn.ativo i { background: color-mix(in srgb, var(--prim) 16%, transparent); }
 .nav-badge {
     position: absolute; top: 8px; right: calc(50% - 20px);
     min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
@@ -307,8 +308,12 @@ body:has(> #app:not(.hidden)) > .bio-lock { display: none !important; }
     padding: 14px; margin-bottom: 14px;
 }
 .card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.card-head h3 { font-size: 13.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
-.card-head h3 i { color: var(--prim); }
+.card-head h3 { font-size: 13.5px; font-weight: 700; display: flex; align-items: center; gap: 9px; }
+.card-head h3 i {
+    width: 27px; height: 27px; border-radius: 8px; flex-shrink: 0;
+    display: grid; place-items: center; font-size: 11.5px; color: var(--prim);
+    background: color-mix(in srgb, currentColor 15%, transparent);
+}
 .link { color: var(--info); font-size: 12px; }
 
 .vazio { text-align: center; color: var(--txt3); font-size: 13px; padding: 22px 8px; }
@@ -327,14 +332,23 @@ body:has(> #app:not(.hidden)) > .bio-lock { display: none !important; }
     padding: 11px 4px; border-bottom: 1px solid var(--borda);
 }
 .linha:last-child, .linha-emp:last-child { border-bottom: 0; }
-.linha-emp { background: var(--card); border: 1px solid var(--borda); border-radius: 14px;
-    padding: 12px; margin-bottom: 8px; }
+.linha-emp { padding: 12px 4px; }
+.linha-emp:active { background: color-mix(in srgb, var(--txt) 4%, transparent); }
 .linha-emp.inativa { opacity: .55; }
+.lista-emp { padding: 4px 14px; }
 .linha-ico {
-    width: 38px; height: 38px; border-radius: 11px; flex-shrink: 0;
-    display: grid; place-items: center;
-    background: var(--card2); color: var(--prim);
+    width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
+    display: grid; place-items: center; font-size: 16px;
+    background: color-mix(in srgb, currentColor 14%, transparent);
+    color: var(--prim);
 }
+/* chip de ícone reutilizável — a cor vem de color/style="color:..." */
+.ic {
+    width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
+    display: grid; place-items: center; font-size: 16px;
+    background: color-mix(in srgb, currentColor 14%, transparent);
+}
+.ic-sm { width: 30px; height: 30px; border-radius: 9px; font-size: 13px; }
 .linha-txt { flex: 1; min-width: 0; }
 .linha-txt b { display: block; font-size: 14px; font-weight: 600;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -366,7 +380,8 @@ body[data-tema="claro"] .pill.info { color: #0284c7; }
     background: var(--card); border: 1px solid var(--borda); color: var(--txt2);
 }
 .chip.on { background: linear-gradient(135deg, var(--prim), var(--prim2)); color: #1a1206;
-    font-weight: 700; border-color: transparent; }
+    font-weight: 700; border-color: transparent;
+    box-shadow: 0 3px 12px color-mix(in srgb, var(--prim) 35%, transparent); }
 
 .chk {
     width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
@@ -378,6 +393,15 @@ body[data-tema="claro"] .pill.info { color: #0284c7; }
 
 .voltar { display: flex; align-items: center; gap: 8px; color: var(--info);
     font-size: 13px; margin: 4px 0 12px; }
+/* feedback de toque nos itens clicáveis */
+.linha-emp:active, .opcao:active, .card-destaque:active, .menu-item:active,
+.sf-btn:active, .chip:active, .seg button:active { transform: scale(.97); }
+.linha-emp, .opcao, .card-destaque, .chip { transition: transform .12s ease; }
+/* ficha da empresa: destaque sutil com a cor primária */
+.card.emp-cab {
+    background: linear-gradient(140deg,
+        color-mix(in srgb, var(--prim) 9%, var(--card)) 0%, var(--card) 55%);
+}
 .emp-cab h2 { font-size: 18px; }
 .emp-cab p { color: var(--txt2); font-size: 12px; margin: 3px 0 10px; }
 .pills { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -397,9 +421,9 @@ body[data-tema="claro"] .pill.info { color: #0284c7; }
 .perfil-cab p { color: var(--txt2); font-size: 12px; }
 .opcao {
     display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
-    background: var(--card); border: 1px solid var(--borda); border-radius: 14px;
-    padding: 13px 14px; margin-bottom: 8px;
+    padding: 12px 4px; border-bottom: 1px solid var(--borda);
 }
+.opcao:last-child { border-bottom: 0; }
 .opcao > i { width: 22px; text-align: center; }
 .switch {
     width: 40px; height: 22px; border-radius: 11px; flex-shrink: 0;
@@ -517,6 +541,7 @@ body[data-tema="claro"] .pill.info { color: #0284c7; }
     width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0;
     display: grid; place-items: center; font-weight: 800; font-size: 16px;
     background: linear-gradient(135deg, var(--prim), var(--prim2)); color: #1a1206;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--prim) 22%, transparent);
 }
 .hero-info { flex: 1; min-width: 0; line-height: 1.35; }
 .hero-info b { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -544,10 +569,12 @@ body[data-tema="claro"] .pill.info { color: #0284c7; }
 .cd-txt b { display: block; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cd-txt small { font-size: 11px; color: var(--txt2); }
 .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
-.stat { padding: 14px; background: var(--card); border: 1px solid var(--borda); border-radius: 16px; }
+.stat { padding: 14px; background: var(--card); border: 1px solid var(--borda); border-radius: 16px;
+    transition: transform .12s ease; }
 .stat-titulo { font-size: 10px; font-weight: 700; letter-spacing: 1px; color: var(--txt3); }
-.stat-valor { font-size: 22px; font-weight: 800; margin-top: 4px; color: var(--prim); }
-.stat-sub { font-size: 10.5px; color: var(--txt2); margin-top: 2px; }
+.stat-valor { font-size: 24px; font-weight: 800; margin-top: 5px; color: var(--prim);
+    font-variant-numeric: tabular-nums; }
+.stat-sub { font-size: 10.5px; color: var(--txt2); margin-top: 3px; }
 
 /* ---------- lock biom�trico ---------- */
 .bio-lock {
