@@ -7,7 +7,7 @@
  * ========================================================= */
 'use strict';
 
-const VERSAO = '1.3.16';
+const VERSAO = '1.3.17';
 const SUPA = (window.SGO_CFG?.SUPABASE_URL || '').replace(/\/$/, '');
 const AKEY = window.SGO_CFG?.SUPABASE_KEY || '';
 const K_SESS = 'sgo_mob_sess';      // {access_token, refresh_token, usuario, user_id}
@@ -1184,6 +1184,10 @@ const R = {
                         <p class="diag">Parcelas em atraso: <b style="color:var(--perigo)">${d.parcelas_atraso}</b></p>`;
                     if (d.tipo === 'inscricao') return `<div class="sf-sec"><i class="fa-solid fa-triangle-exclamation" style="color:var(--prim)"></i> ${esc(d.secao)} — ${d.qtd} inscrição(ões)</div>
                         <p class="diag">${(d.itens || []).map(i => esc(i.texto)).join('<br>')}</p>`;
+                    if (d.tipo === 'omissao') return `<div class="sf-sec"><i class="fa-solid fa-triangle-exclamation" style="color:var(--prim)"></i> ${esc(d.secao)} — ${d.qtd || (d.itens || []).length} omissão(ões)</div>
+                        <p class="diag">${(d.itens || []).map(esc).join(', ')}</p>`;
+                    if (d.tipo === 'outros') return `<div class="sf-sec"><i class="fa-solid fa-circle-info" style="color:var(--info)"></i> ${esc(d.secao)}</div>
+                        <p class="diag">${(d.linhas || []).map(esc).join('<br>')}</p>`;
                     const av = d.tipo === 'a_vencer';
                     return `<div class="sf-sec"><i class="fa-solid ${av ? 'fa-clock' : 'fa-triangle-exclamation'}" style="color:${av ? 'var(--info)' : 'var(--perigo)'}"></i> ${esc(d.secao)} — ${d.debitos.length} débito(s)${av ? ' a vencer' : ''} · ${fmtMoeda(d.total)}</div>
                         ${tb(['Receita', 'PA', 'Vencimento', 'Saldo dev.', 'Situação'],
@@ -1203,6 +1207,8 @@ const R = {
                         ${(s.pendencias_det || []).map(d => {
                             if (d.tipo === 'parcelamento') return `<div class="diag"><b>${esc(d.programa || d.secao)}</b> — parcelas em atraso: <b>${d.parcelas_atraso}</b></div>`;
                             if (d.tipo === 'inscricao') return `<div class="diag"><b>${esc(d.secao)}</b> — ${d.qtd} inscrição(ões)<br>${(d.itens || []).map(i => esc(i.texto)).join('<br>')}</div>`;
+                            if (d.tipo === 'omissao') return `<div class="diag"><b>${esc(d.secao)}</b> — ${d.qtd || (d.itens || []).length} omissão(ões): ${(d.itens || []).map(esc).join(', ')}</div>`;
+                            if (d.tipo === 'outros') return `<div class="diag"><b>${esc(d.secao)}</b><br>${(d.linhas || []).map(esc).join('<br>')}</div>`;
                             const av = d.tipo === 'a_vencer';
                             return `<div class="diag"><b>${esc(d.secao)}</b> — ${d.debitos.length} débito(s)${av ? ' (exigibilidade suspensa · a vencer)' : ''} · ${fmtMoeda(d.total)}</div>
                                 ${tb(['Receita', 'PA', 'Vencimento', 'Saldo dev.', 'Situação', 'Notificação'],
