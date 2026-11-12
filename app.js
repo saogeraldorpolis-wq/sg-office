@@ -7,7 +7,7 @@
  * ========================================================= */
 'use strict';
 
-const VERSAO = '1.3.13';
+const VERSAO = '1.3.14';
 const SUPA = (window.SGO_CFG?.SUPABASE_URL || '').replace(/\/$/, '');
 const AKEY = window.SGO_CFG?.SUPABASE_KEY || '';
 const K_SESS = 'sgo_mob_sess';      // {access_token, refresh_token, usuario, user_id}
@@ -631,6 +631,12 @@ const fmtCpf = (c) => {
 const fmtMoeda = (v) => (v == null || v === '' || isNaN(+v)) ? '—'
     : (+v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const funcAtivo = (f) => !f.demissao && String(f.situacao || 'ativo').toLowerCase() !== 'demitido';
+/* ativo na competência YYYY-MM: admitido até o fim do mês e não demitido antes dele */
+const funcAtivoEm = (f, comp) => {
+    if (f.admissao && String(f.admissao) > comp + '-31') return false;
+    if (f.demissao) return String(f.demissao) >= comp + '-01';
+    return String(f.situacao || 'ativo').toLowerCase() !== 'demitido';
+};
 
 /* competência selecionável nos módulos Fiscal/Folha (chips, mais recente 1º) */
 function compSel(rows) {
@@ -963,14 +969,14 @@ const R = {
         const { comps, sel } = compSel(fech);
         const rows = fech.filter(r => r.competencia === sel);
         const funcs = M.filtra('funcionarios');
-        const nAtivos = id => funcs.filter(f => f.empresa_id === id && funcAtivo(f)).length;
+        const nAtivos = id => funcs.filter(f => f.empresa_id === id && funcAtivoEm(f, sel)).length;
         const nPend = rows.filter(r => (r.status || 'pendente') !== 'fechado').length;
         return `
         <div class="chips">${compChips(comps, sel)}</div>
         <div class="stats">
             <div class="stat"><div class="stat-titulo">FUNCIONÁRIOS</div>
-                <div class="stat-valor">${funcs.filter(funcAtivo).length}</div>
-                <div class="stat-sub">ativos cadastrados</div></div>
+                <div class="stat-valor">${funcs.filter(f => funcAtivoEm(f, sel)).length}</div>
+                <div class="stat-sub">ativos em ${esc(sel)}</div></div>
             <div class="stat"><div class="stat-titulo">FECHAMENTOS</div>
                 <div class="stat-valor" style="color:${nPend ? 'var(--perigo)' : 'var(--ok)'}">${rows.length - nPend}/${rows.length}</div>
                 <div class="stat-sub">fechados em ${esc(sel)}</div></div>
