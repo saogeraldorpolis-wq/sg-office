@@ -7,7 +7,7 @@
  * ========================================================= */
 'use strict';
 
-const VERSAO = '1.3.11';
+const VERSAO = '1.3.12';
 const SUPA = (window.SGO_CFG?.SUPABASE_URL || '').replace(/\/$/, '');
 const AKEY = window.SGO_CFG?.SUPABASE_KEY || '';
 const K_SESS = 'sgo_mob_sess';      // {access_token, refresh_token, usuario, user_id}
@@ -553,6 +553,11 @@ const M = window.M = {
     voltarEmpresa() { M._emp = null; M.render(); },
     sfDet(id) { M._sf = id; M.render(); $('#conteudo').scrollTop = 0; },
     sfVoltar() { M._sf = null; M.render(); },
+    sfSub(s) { M._sfSub = s; M.render(); },
+    sfChartMode(m) { M._sfChartMode = m; M.render(); },
+    sfImporta() {
+        toast('A importação de PDFs é feita no desktop — os demonstrativos sincronizam aqui automaticamente.');
+    },
     abrirEmpresa(id) { M._emp = id; M.render(); $('#conteudo').scrollTop = 0; },
     buscar(v) {
         M._busca = v.toLowerCase();
@@ -893,8 +898,67 @@ const R = {
     situacao() {
         if (M._sf) return R.situacaoDet(M._sf);
         const regs = M.filtra('situacao_fiscal');
+        const emps = M.filtra('empresas').filter(ativa);
+        const divida = regs.reduce((s, x) => s + (+x.total_debitos || 0), 0);
+        const comDeb = new Set(regs.filter(x => (x.qtd_debitos || 0) > 0).map(x => x.empresa_id)).size;
+        const nDeb = regs.reduce((s, x) => s + (x.qtd_debitos || 0), 0);
+        const nOm = regs.reduce((s, x) => s + (x.omissoes || []).filter(o => o.status === 'ok').length, 0);
+        const nPr = regs.reduce((s, x) => s + (x.processos || []).length, 0);
+        const semRel = emps.filter(e => !regs.some(x => x.empresa_id === e.id));
+        const modo = M._sfChartMode || 'empresa';
+        const porEmp = {};
+        regs.forEach(s => porEmp[s.empresa_id] = (porEmp[s.empresa_id] || 0) + (+s.total_debitos || 0));
+        const nBars = modo === 'ente'
+            ? [...new Set(regs.map(s => s.origem))].length
+            : Object.values(porEmp).filter(v => v > 0).length;
+
+        const barra = `<div class="sf-bar">
+            <button class="sf-btn ${(M._sfSub || 'lista') === 'lista' ? 'on' : ''}" onclick="M.sfSub('lista')">
+                <i class="fa-solid fa-file-shield"></i> Demonstrativos <b class="bdg">${regs.length}</b></button>
+            <button class="sf-btn ${M._sfSub === 'cob' ? 'on' : ''}" onclick="M.sfSub('cob')">
+                <i class="fa-solid fa-calendar-check"></i> Cobertura
+                <b class="bdg ${semRel.length ? 'warn' : ''}">${semRel.length ? semRel.length + ' sem relatório' : 'em dia'}</b></button>
+            <span class="sf-sep">Importar:</span>
+            <button class="sf-btn" onclick="M.sfImporta()"><i class="fa-solid fa-file-arrow-up" style="color:#34d399"></i> DSOT/SEFAZ</button>
+            <button class="sf-btn" onclick="M.sfImporta()"><i class="fa-solid fa-file-arrow-up" style="color:#a78bfa"></i> Receita/PGFN</button>
+        </div>`;
+
+        const panorama = barra + `
+            <div class="sf-kpis">
+                <div class="stat"><div class="stat-titulo">Dívida global</div>
+                    <div class="stat-valor" style="color:#f87171;font-size:18px">${fmtMoeda(divida)}</div>
+                    <div class="stat-sub">empresas da carteira</div></div>
+                <div class="stat"><div class="stat-titulo">Com débitos</div>
+                    <div class="stat-valor">${comDeb}</div><div class="stat-sub">empresa(s)</div></div>
+                <div class="stat"><div class="stat-titulo">Débitos</div>
+                    <div class="stat-valor">${nDeb}</div><div class="stat-sub">listados</div></div>
+                <div class="stat"><div class="stat-titulo">Omissões</div>
+                    <div class="stat-valor">${nOm}</div><div class="stat-sub">pendentes</div></div>
+                <div class="stat"><div class="stat-titulo">Processos</div>
+                    <div class="stat-valor">${nPr}</div><div class="stat-sub">em tramitação</div></div>
+            </div>
+            ${nBars ? `<div class="card">
+                <div class="card-head"><h3><i class="fa-solid fa-chart-column" style="color:#f87171"></i>
+                    Dívida ${modo === 'ente' ? 'por ente' : 'por empresa'}</h3>
+                    <span class="seg">
+                        <button class="${modo === 'empresa' ? 'on' : ''}" onclick="M.sfChartMode('empresa')">Empresa</button>
+                        <button class="${modo === 'ente' ? 'on' : ''}" onclick="M.sfChartMode('ente')">Ente</button>
+                    </span></div>
+                ${window.Chart ? `<div class="bi-chart" style="height:${Math.max(150, 44 + nBars * 34)}px"><canvas id="sf-chart"></canvas></div>`
+                : '<div class="vazio">Gráfico precisa de conexão na primeira carga.</div>'}</div>` : ''}`;
+
+        if (M._sfSub === 'cob') {
+            return panorama + `<p class="ap-sub" style="margin:0 2px 10px">Empresas da carteira sem demonstrativo importado — toque para abrir a ficha.</p>` +
+                (semRel.length ? semRel.map(e => `<button class="linha-emp" onclick="M.abrirEmpresa('${e.id}')">
+                    <div class="linha-ico"><i class="fa-solid fa-building"></i></div>
+                    <div class="linha-txt"><b>${esc(e.nome)}</b><span>${esc(e.cnpj || '—')} · ${esc(regimeVigente(e))}</span></div>
+                    <span class="pill vencido">sem relatório</span>
+                    <i class="fa-solid fa-chevron-right seta"></i></button>`).join('')
+                : '<div class="vazio"><i class="fa-solid fa-circle-check"></i> Todas as empresas da carteira têm demonstrativo.</div>');
+        }
+
         if (!regs.length)
-            return '<div class="vazio"><i class="fa-solid fa-scale-balanced"></i> Nenhum diagnóstico fiscal importado.</div>';
+            return panorama + '<div class="vazio"><i class="fa-solid fa-scale-balanced"></i> Nenhum diagnóstico fiscal importado — a importação de PDFs é feita no desktop.</div>';
         const grupos = {};
         regs.forEach(s => (grupos[s.empresa_id] = grupos[s.empresa_id] || []).push(s));
         const ult = arr => arr.slice().sort((a, b) =>
@@ -917,7 +981,7 @@ const R = {
                 <span class="pill ${ok ? 'ok' : 'vencido'}">${esc(sit || '—')}</span>
                 <i class="fa-solid fa-chevron-right seta"></i></button>`;
         }).join('');
-        return `<p class="ap-sub" style="margin:0 2px 10px">Toque na empresa para ver o detalhamento por ente — Estadual (DSOT) e Federal (Receita/PGFN).</p>` + cards;
+        return panorama + `<p class="ap-sub" style="margin:0 2px 10px">Toque na empresa para ver o detalhamento por ente — Estadual (DSOT) e Federal (Receita/PGFN).</p>` + cards;
     },
 
     /* detalhe por empresa — mesmas separações do desktop:
@@ -1180,11 +1244,16 @@ const R = {
 /* gráficos do BI — recriados a cada render (canvas novo no DOM) */
 function initBiCharts() {
     (M._charts || []).forEach(c => c.destroy()); M._charts = [];
-    if (!window.Chart || !document.getElementById('bi-fat')) return;
+    if (!window.Chart) return;
     const cssVar = (v) => getComputedStyle(document.body).getPropertyValue(v).trim();
     Chart.defaults.color = cssVar('--txt2') || '#9aa7bd';
     Chart.defaults.font.size = 10;
     const grid = { color: (cssVar('--txt3') || '#64748b') + '44' };
+    const moeda = (v) => (+v).toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+    const mk = (el, cfg) => el && M._charts.push(new Chart(el, cfg));
+
+    _sfChart(mk, grid, moeda);
+    if (!document.getElementById('bi-fat')) return;
 
     const bi = M.filtra('bi_mensal');
     const m = {};
@@ -1195,8 +1264,6 @@ function initBiCharts() {
         if (x.funcionarios != null) { a.fun += (+x.funcionarios || 0); a.temF = true; }
     }
     const comps = Object.keys(m).sort().slice(-12);
-    const moeda = (v) => (+v).toLocaleString('pt-BR', { maximumFractionDigits: 0 });
-    const mk = (el, cfg) => el && M._charts.push(new Chart(el, cfg));
 
     if (comps.length) {
         mk($('#bi-fat'), {
@@ -1246,6 +1313,41 @@ function initBiCharts() {
                           y: { grid: { display: false } } },
                 maintainAspectRatio: false } });
     }
+}
+
+/* panorama da Situação Fiscal — barras horizontais, por empresa ou por ente */
+function _sfChart(mk, grid, moeda) {
+    const el = document.getElementById('sf-chart');
+    if (!el) return;
+    const regs = M.filtra('situacao_fiscal');
+    const modo = M._sfChartMode || 'empresa';
+    let labels, dados;
+    if (modo === 'ente') {
+        const agg = {};
+        regs.forEach(s => {
+            const ente = { receita: 'Federal', dsot: 'Estadual', municipal: 'Municipal' }[s.origem] || 'Outro';
+            agg[ente] = (agg[ente] || 0) + (+s.total_debitos || 0);
+        });
+        const itens = Object.entries(agg).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+        labels = itens.map(([k]) => k); dados = itens.map(([, v]) => v);
+    } else {
+        const agg = {};
+        regs.forEach(s => agg[s.empresa_id] = (agg[s.empresa_id] || 0) + (+s.total_debitos || 0));
+        const top = Object.entries(agg).filter(([, v]) => v > 0)
+            .sort((a, b) => b[1] - a[1]).slice(0, 10);
+        labels = top.map(([id]) => (empNome(id) || '?').slice(0, 24)); dados = top.map(([, v]) => v);
+    }
+    if (!dados.length) return;
+    mk(el, {
+        type: 'bar',
+        data: { labels, datasets: [{ data: dados,
+            backgroundColor: '#f87171cc', borderRadius: 8 }] },
+        options: { indexAxis: 'y',
+            plugins: { legend: { display: false },
+                tooltip: { callbacks: { label: (c) => 'R$ ' + moeda(c.parsed.x) } } },
+            scales: { x: { grid, ticks: { callback: moeda } },
+                      y: { grid: { display: false } } },
+            maintainAspectRatio: false } });
 }
 
 /* linha genérica de item de prazo */

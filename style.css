@@ -607,6 +607,35 @@ body[data-tema="claro"] .pill.info { color: #0284c7; }
 .upd-card i { font-size: 22px; color: var(--prim); }
 .upd-card b { font-size: 14px; font-weight: 600; }
 
+/* ---------- panorama fiscal: barra de ações + KPIs ---------- */
+.sf-bar {
+    display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 4px;
+    align-items: center; scrollbar-width: none;
+}
+.sf-bar::-webkit-scrollbar { display: none; }
+.sf-btn {
+    display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+    padding: 7px 11px; border-radius: 999px; font-size: 11px; font-weight: 600;
+    background: var(--card); border: 1px solid var(--borda); color: var(--txt2);
+    white-space: nowrap;
+}
+.sf-btn.on { border-color: var(--prim); color: var(--prim); }
+.sf-btn .bdg {
+    font-size: 9.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px;
+    background: color-mix(in srgb, var(--prim) 18%, transparent); color: var(--prim);
+}
+.sf-btn .bdg.warn { background: #f8717122; color: #f87171; }
+.sf-sep {
+    font-size: 10px; color: var(--txt3); flex-shrink: 0;
+    border-left: 1px solid var(--borda); padding-left: 8px;
+}
+.sf-kpis {
+    display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 10px;
+    scrollbar-width: none;
+}
+.sf-kpis::-webkit-scrollbar { display: none; }
+.sf-kpis .stat { min-width: 118px; flex-shrink: 0; margin: 0; }
+
 /* ---------- detalhamento fiscal (DSOT / Receita) ---------- */
 .sf-sec {
     font-size: 11px; font-weight: 700; letter-spacing: .6px;
