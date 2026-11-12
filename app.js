@@ -7,7 +7,7 @@
  * ========================================================= */
 'use strict';
 
-const VERSAO = '1.3.10';
+const VERSAO = '1.3.11';
 const SUPA = (window.SGO_CFG?.SUPABASE_URL || '').replace(/\/$/, '');
 const AKEY = window.SGO_CFG?.SUPABASE_KEY || '';
 const K_SESS = 'sgo_mob_sess';      // {access_token, refresh_token, usuario, user_id}
@@ -551,6 +551,8 @@ const M = window.M = {
     setComp(c) { M._comp = c; M.render(); },
 
     voltarEmpresa() { M._emp = null; M.render(); },
+    sfDet(id) { M._sf = id; M.render(); $('#conteudo').scrollTop = 0; },
+    sfVoltar() { M._sf = null; M.render(); },
     abrirEmpresa(id) { M._emp = id; M.render(); $('#conteudo').scrollTop = 0; },
     buscar(v) {
         M._busca = v.toLowerCase();
@@ -889,25 +891,140 @@ const R = {
     },
 
     situacao() {
+        if (M._sf) return R.situacaoDet(M._sf);
         const regs = M.filtra('situacao_fiscal');
         if (!regs.length)
             return '<div class="vazio"><i class="fa-solid fa-scale-balanced"></i> Nenhum diagnóstico fiscal importado.</div>';
-        return regs.map(s => {
-            const sit = String(s.situacao || '');
+        const grupos = {};
+        regs.forEach(s => (grupos[s.empresa_id] = grupos[s.empresa_id] || []).push(s));
+        const ult = arr => arr.slice().sort((a, b) =>
+            String(b.atualizado_em || '').localeCompare(String(a.atualizado_em || '')))[0];
+        const cards = Object.entries(grupos).sort((a, b) =>
+            empNome(a[0]).localeCompare(empNome(b[0]))).map(([eid, recs]) => {
+            const dsot = ult(recs.filter(x => x.origem !== 'receita'));
+            const rec = ult(recs.filter(x => x.origem === 'receita'));
+            const s = dsot || rec;
+            const sit = String(s?.situacao || '');
             const ok = ['ATIVO', 'ATIVA', 'REGULAR'].includes(sit.toUpperCase());
-            return `<div class="card">
-                <div class="card-head"><h3>${esc(s.nome_doc || empNome(s.empresa_id))}</h3>
-                    <span class="pill ${ok ? 'ok' : 'vencido'}">${esc(sit || '—')}</span></div>
-                <div class="kv"><span>CNPJ</span><b>${esc(s.cnpj || '—')}</b></div>
-                ${s.regime ? `<div class="kv"><span>Regime</span><b>${esc(s.regime)}</b></div>` : ''}
-                ${s.ie ? `<div class="kv"><span>IE</span><b>${esc(s.ie)}</b></div>` : ''}
-                <div class="kv"><span>Débitos</span><b>${s.qtd_debitos ?? 0} · ${fmtMoeda(s.total_debitos)}</b></div>
-                ${s.acrescimos_ate ? `<div class="kv"><span>Acréscimos até</span><b>${esc(s.acrescimos_ate)}</b></div>` : ''}
-                ${s.atualizado_em ? `<div class="kv"><span>Atualizado</span><b>${esc(s.atualizado_em)}</b></div>` : ''}
-                ${s.diagnostico ? `<p class="diag">${esc(s.diagnostico)}</p>` : ''}
-                ${s.origem ? `<span class="pill neutro">${esc(s.origem)}</span>` : ''}
-            </div>`;
+            const linEst = dsot ? `Estadual/DSOT: ${esc(sit || '—')}` +
+                (dsot.qtd_debitos ? ` · ${dsot.qtd_debitos} déb. ${fmtMoeda(dsot.total_debitos)}` : ' · nada consta') : '';
+            const linFed = rec ? `Federal/Receita: ${rec.diagnostico === 'limpa' ? 'sem pendências'
+                : (rec.qtd_debitos ?? (rec.pendencias || []).length ?? 0) + ' pendência(s)'}` : '';
+            return `<button class="linha-emp" onclick="M.sfDet('${eid}')">
+                <div class="linha-ico"><i class="fa-solid fa-scale-balanced"></i></div>
+                <div class="linha-txt"><b>${esc(s?.nome_doc || empNome(eid))}</b>
+                    <span>${[linEst, linFed].filter(Boolean).join('<br>') || esc(sit || '—')}</span></div>
+                <span class="pill ${ok ? 'ok' : 'vencido'}">${esc(sit || '—')}</span>
+                <i class="fa-solid fa-chevron-right seta"></i></button>`;
         }).join('');
+        return `<p class="ap-sub" style="margin:0 2px 10px">Toque na empresa para ver o detalhamento por ente — Estadual (DSOT) e Federal (Receita/PGFN).</p>` + cards;
+    },
+
+    /* detalhe por empresa — mesmas separações do desktop:
+       Estadual (DSOT/SEFAZ) e Federal (Receita/PGFN) com seções,
+       débitos, obrigações acessórias, processos e espelho do documento */
+    situacaoDet(eid) {
+        const recs = M.cole('situacao_fiscal').filter(x => x.empresa_id === eid)
+            .sort((a, b) => (a.origem === 'receita' ? 1 : 0) - (b.origem === 'receita' ? 1 : 0));
+        const e = M.empresa(eid);
+        if (!recs.length) { M._sf = null; return R.situacao(); }
+        const tb = (cols, rows) => `<div class="tb-wrap"><table class="tbm">
+            <thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>
+            <tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+        const bloco = (icone, cor, titulo, inner) => `<div class="card">
+            <div class="card-head"><h3><i class="fa-solid ${icone}" style="color:${cor}"></i> ${titulo}</h3></div>${inner}</div>`;
+
+        const blocoDsot = (s) => {
+            const secoes = (s.secoes || []).filter(x => x.debitos?.length);
+            const omissoes = s.omissoes || [];
+            const processos = s.processos || [];
+            return bloco('fa-landmark', '#34d399',
+                `Estadual — DSOT/SEFAZ${s.atualizado_em ? ` <small>até ${fmtData(s.atualizado_em)}</small>` : ''}`, `
+                <div class="kv"><span>Situação / regime</span><b>${esc(s.situacao || '—')}${s.regime ? ' · ' + esc(s.regime) : ''}</b></div>
+                <div class="kv"><span>Dívida total (c/ acréscimos)</span><b style="color:var(--perigo)">${fmtMoeda(s.total_debitos || 0)}</b></div>
+                ${s.acrescimos_ate ? `<div class="kv"><span>Acréscimos até</span><b>${fmtData(s.acrescimos_ate)}</b></div>` : ''}
+                ${secoes.map(sec => `<div class="sf-sec">${esc(sec.nome)} — ${sec.debitos.length} débito(s) · ${fmtMoeda(sec.total)}</div>
+                    ${tb(['Ref.', 'Receita', 'NF', 'Principal', 'Multa', 'Juros', 'Corr.', 'Total', 'Susp.'],
+                        sec.debitos.map(d => [esc(d.referencia), esc(d.receita), esc(d.nf),
+                            fmtMoeda(d.principal), fmtMoeda(d.multa), fmtMoeda(d.juros),
+                            fmtMoeda(d.correcao), `<b>${fmtMoeda(d.total)}</b>`, esc(d.suspensao || '')]))}`).join('')
+                    || '<p class="diag">Nenhuma seção com débitos — NADA CONSTA em todas.</p>'}
+                ${(s.secoes_limpas || []).map(n => `<div class="sf-sec">${esc(n)}</div><div class="diag" style="color:var(--ok)">NADA CONSTA</div>`).join('')}
+                ${omissoes.length ? `<div class="sf-sec">Obrigações acessórias</div>
+                    <div class="pills">${omissoes.map(o => `<span class="pill ${o.status === 'ok' ? 'atencao' : 'ok'}"
+                        >${esc(o.nome)}${o.status === 'ok' ? ` (${(o.pendencias || []).length || 0})` : ''}</span>`).join('')}</div>
+                    ${omissoes.filter(o => (o.pendencias || []).length).map(o =>
+                        `<div class="diag">${esc(o.nome)}: ${o.pendencias.map(esc).join(', ')}</div>`).join('')}` : ''}
+                ${processos.length ? `<div class="sf-sec">Processos em tramitação</div>
+                    ${tb(['Processo', 'Origem', 'Data', 'Fase', 'Valor'],
+                        processos.map(pr => [esc(pr.numero), esc(pr.origem || '—'), esc(pr.data || '—'),
+                            esc(pr.fase || '—'), `<b>${fmtMoeda(pr.valor_total)}</b>`]))}` : ''}
+                <details class="esp"><summary><i class="fa-solid fa-file-lines"></i> Espelho do demonstrativo</summary>
+                    <div class="esp-doc">
+                        <b>${esc(s.nome_doc || e?.nome || '')}</b><br>
+                        <span class="diag">CNPJ ${esc(s.cnpj || e?.cnpj || '—')}${s.ie ? ' · IE ' + esc(s.ie) : ''} · ${esc(s.situacao || '—')}${s.regime ? ' · ' + esc(s.regime) : ''}</span><br>
+                        <span class="diag">Demonstrativo de Situação de Obrigações Tributárias — dados até ${fmtData(s.atualizado_em)}${s.acrescimos_ate ? ' · acréscimos até ' + fmtData(s.acrescimos_ate) : ''}</span>
+                        ${(s.secoes || []).map(sec => `<div class="sf-sec">${esc(sec.nome)}</div>
+                            ${tb(['Seq', 'Referência', 'Receita', 'nº NF', 'Principal', 'Multa', 'Juros', 'Correção', 'Total', 'Suspensão'],
+                                sec.debitos.map(d => [d.seq || '—', esc(d.referencia), esc(d.receita), esc(d.nf),
+                                    fmtMoeda(d.principal), fmtMoeda(d.multa), fmtMoeda(d.juros), fmtMoeda(d.correcao),
+                                    `<b>${fmtMoeda(d.total)}</b>`, esc(d.suspensao || '')]))}
+                            <div class="diag" style="text-align:right">Subtotal: <b>${fmtMoeda(sec.total)}</b></div>`).join('')}
+                        ${(s.secoes_limpas || []).map(n => `<div class="sf-sec">${esc(n)}</div><div class="diag" style="color:var(--ok)">NADA CONSTA</div>`).join('')}
+                        <div class="sf-sec" style="text-align:center">TOTAL DOS DÉBITOS: <b>${fmtMoeda(s.total_debitos || 0)}</b> — fim do demonstrativo</div>
+                    </div></details>`);
+        };
+
+        const blocoReceita = (s) => {
+            const c = s.certidao;
+            const dv = c?.validade ? diasPara(c.validade) : null;
+            return bloco('fa-flag', '#a78bfa', 'Federal — Receita/PGFN', `
+                <div class="kv"><span>Diagnóstico</span><b>${s.diagnostico === 'limpa' ? 'Sem pendências'
+                    : s.diagnostico === 'pendencias' ? 'Pendências encontradas' : 'Indefinido'}</b></div>
+                <div class="kv"><span>Situação cadastral</span><b>${esc(s.situacao || '—')}</b></div>
+                ${c ? `<div class="kv"><span>Certidão ${esc(c.tipo)}</span><b>${esc(c.numero)}</b></div>
+                <div class="kv"><span>Emissão → Validade</span><b>${fmtData(c.emissao)} → ${fmtData(c.validade)}${dv !== null && dv < 0 ? ` <span style="color:var(--perigo)">vencida há ${-dv}d</span>` : dv !== null && dv <= 15 ? ` <span style="color:var(--perigo)">vence em ${dv}d</span>` : ''}</b></div>` : ''}
+                ${(s.pendencias_det || []).map(d => {
+                    if (d.tipo === 'parcelamento') return `<div class="sf-sec"><i class="fa-solid fa-triangle-exclamation" style="color:var(--prim)"></i> ${esc(d.programa || d.secao)}</div>
+                        <p class="diag">Parcelas em atraso: <b style="color:var(--perigo)">${d.parcelas_atraso}</b></p>`;
+                    if (d.tipo === 'inscricao') return `<div class="sf-sec"><i class="fa-solid fa-triangle-exclamation" style="color:var(--prim)"></i> ${esc(d.secao)} — ${d.qtd} inscrição(ões)</div>
+                        <p class="diag">${(d.itens || []).map(i => esc(i.texto)).join('<br>')}</p>`;
+                    const av = d.tipo === 'a_vencer';
+                    return `<div class="sf-sec"><i class="fa-solid ${av ? 'fa-clock' : 'fa-triangle-exclamation'}" style="color:${av ? 'var(--info)' : 'var(--perigo)'}"></i> ${esc(d.secao)} — ${d.debitos.length} débito(s)${av ? ' a vencer' : ''} · ${fmtMoeda(d.total)}</div>
+                        ${tb(['Receita', 'PA', 'Vencimento', 'Saldo dev.', 'Situação'],
+                            d.debitos.map(x => [esc(x.receita), x.pa || '—', fmtData(x.vencimento),
+                                `<b>${fmtMoeda(x.saldo)}</b>`, esc(x.situacao || '—')]))}`;
+                }).join('')
+                || ((s.pendencias || []).length ? `<div class="diag">${s.pendencias.map(esc).join('<br>')}</div>` : '')}
+                <details class="esp"><summary><i class="fa-solid fa-file-lines"></i> Espelho do relatório</summary>
+                    <div class="esp-doc">
+                        <b>${esc(s.nome_doc || e?.nome || '')}</b><br>
+                        <span class="diag">${esc(s.cnpj || e?.cnpj || '—')} · situação cadastral ${esc(s.situacao || '—')}</span><br>
+                        <span class="diag">Relatório de Situação Fiscal — Receita Federal/PGFN · emitido em ${fmtData(s.atualizado_em)}</span>
+                        ${c ? `<div class="sf-sec">Certidão emitida</div>
+                            <div class="diag">Certidão ${esc(c.tipo)} · nº ${esc(c.numero)} · emissão ${fmtData(c.emissao)} · validade ${fmtData(c.validade)}</div>` : ''}
+                        <div class="sf-sec">Diagnóstico fiscal</div>
+                        ${s.diagnostico === 'limpa' ? '<div class="diag" style="color:var(--ok)">Não foram detectadas pendências nas bases de dados.</div>' : ''}
+                        ${(s.pendencias_det || []).map(d => {
+                            if (d.tipo === 'parcelamento') return `<div class="diag"><b>${esc(d.programa || d.secao)}</b> — parcelas em atraso: <b>${d.parcelas_atraso}</b></div>`;
+                            if (d.tipo === 'inscricao') return `<div class="diag"><b>${esc(d.secao)}</b> — ${d.qtd} inscrição(ões)<br>${(d.itens || []).map(i => esc(i.texto)).join('<br>')}</div>`;
+                            const av = d.tipo === 'a_vencer';
+                            return `<div class="diag"><b>${esc(d.secao)}</b> — ${d.debitos.length} débito(s)${av ? ' (exigibilidade suspensa · a vencer)' : ''} · ${fmtMoeda(d.total)}</div>
+                                ${tb(['Receita', 'PA', 'Vencimento', 'Saldo dev.', 'Situação', 'Notificação'],
+                                    d.debitos.map(x => [esc(x.receita), x.pa || '—', fmtData(x.vencimento),
+                                        `<b>${fmtMoeda(x.saldo)}</b>`, esc(x.situacao || '—'), esc(x.notificacao || '—')]))}`;
+                        }).join('')}
+                        <div class="sf-sec" style="text-align:center">Fim do relatório</div>
+                    </div></details>`);
+        };
+
+        return `
+        <button class="voltar" onclick="M.sfVoltar()"><i class="fa-solid fa-arrow-left"></i> Situação fiscal</button>
+        <div class="card emp-cab">
+            <h2>${esc(e?.nome || recs[0].nome_doc || '')}</h2>
+            <p>${esc(e?.cnpj || recs[0].cnpj || '—')}${e?.municipio ? ' · ' + esc(e.municipio) + '/' + esc(e.uf || '') : ''}</p>
+        </div>
+        ${recs.map(s => s.origem === 'receita' ? blocoReceita(s) : blocoDsot(s)).join('')}`;
     },
 
     documentos() {
