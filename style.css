@@ -2,6 +2,7 @@
    SG Office Mobile — identidade âmbar/escuro + tema claro
    ========================================================= */
 :root {
+    color-scheme: dark;
     --bg: #0b1220;
     --bg2: #0f1a2e;
     --card: #111c33;
@@ -18,7 +19,13 @@
     --sombra: 0 6px 24px #0008;
     --nav-h: 62px;
 }
+/* o <html> também pinta o fundo — overscroll/status bar/flash de boot
+   nunca mostram branco por trás do body */
+html { background: var(--bg); }
+/* 'sacro' (Dourado) = padrão; regra explícita garante as mesmas vars */
+body[data-tema="sacro"] { color-scheme: dark; }
 body[data-tema="claro"] {
+    color-scheme: light;
     --bg: #faf7f2;
     --bg2: #f3ede2;
     --card: #ffffff;
