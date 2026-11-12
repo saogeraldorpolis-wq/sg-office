@@ -7,7 +7,7 @@
  * ========================================================= */
 'use strict';
 
-const VERSAO = '1.3.12';
+const VERSAO = '1.3.13';
 const SUPA = (window.SGO_CFG?.SUPABASE_URL || '').replace(/\/$/, '');
 const AKEY = window.SGO_CFG?.SUPABASE_KEY || '';
 const K_SESS = 'sgo_mob_sess';      // {access_token, refresh_token, usuario, user_id}
@@ -551,6 +551,42 @@ const M = window.M = {
     setComp(c) { M._comp = c; M.render(); },
 
     voltarEmpresa() { M._emp = null; M.render(); },
+    empAno(d) { M._empAno = (M._empAno || new Date().getFullYear()) + d; M.render(); },
+    async salvarBi() {
+        if (!M.pode('empresas')) throw new Error('Sem permissão para editar.');
+        const comp = $('#bi-comp')?.value;
+        if (!comp) throw new Error('Informe a competência.');
+        const fat = parseFloat(String($('#bi-fat-in').value || '')
+            .replace(/\s/g, '').replace(/\./g, '').replace(',', '.')) || 0;
+        let func = $('#bi-fun-in').value.trim();
+        func = func === '' ? null : parseInt(func, 10);
+        if (func !== null && isNaN(func)) func = null;
+        const ex = M.cole('bi_mensal').find(x => x.empresa_id === M._emp && x.competencia === comp);
+        if (ex) {
+            await M._patch('bi_mensal', ex.id, { faturamento: fat, funcionarios: func });
+            ex.faturamento = fat; ex.funcionarios = func;
+        } else {
+            const id = crypto.randomUUID?.()
+                || (Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
+            const r = await rest(TABELAS.bi_mensal[0], { method: 'POST',
+                headers: { Prefer: 'return=minimal' },
+                body: JSON.stringify({ id, empresa_id: M._emp, competencia: comp,
+                    faturamento: fat, funcionarios: func, extra: {},
+                    updated_by: 'mobile:' + (M.usuario?.nome || '?') }) });
+            if (!r.ok) throw new Error('Falha ao lançar (HTTP ' + r.status + ').');
+            (M.dados.bi_mensal = M.dados.bi_mensal || [])
+                .push({ id, empresa_id: M._emp, competencia: comp, faturamento: fat, funcionarios: func });
+        }
+        toast('Lançamento salvo.'); M.render();
+    },
+    async excluirBi(id) {
+        if (!M.pode('empresas')) throw new Error('Sem permissão para editar.');
+        const r = await rest(`${TABELAS.bi_mensal[0]}?id=eq.${encodeURIComponent(id)}`,
+            { method: 'DELETE' });
+        if (!r.ok) throw new Error('Falha ao excluir (HTTP ' + r.status + ').');
+        M.dados.bi_mensal = M.cole('bi_mensal').filter(x => x.id !== id);
+        toast('Lançamento excluído.'); M.render();
+    },
     sfDet(id) { M._sf = id; M.render(); $('#conteudo').scrollTop = 0; },
     sfVoltar() { M._sf = null; M.render(); },
     sfSub(s) { M._sfSub = s; M.render(); },
@@ -767,6 +803,18 @@ const R = {
         const obgs = M.cole('fiscal_obrigacoes');
         const entregues = fisc.filter(f => f.status === 'entregue').length;
         const hist = (e.regimes || []).slice().sort((a, b) => String(b.inicio || '').localeCompare(String(a.inicio || '')));
+        const ano = M._empAno || new Date().getFullYear();
+        const biTodos = M.cole('bi_mensal').filter(x => x.empresa_id === id)
+            .sort((a, b) => String(b.competencia || '').localeCompare(String(a.competencia || '')));
+        const biAno = biTodos.filter(x => String(x.competencia || '').startsWith(ano + '-'));
+        const fatAno = biAno.reduce((s, x) => s + (+x.faturamento || 0), 0);
+        const mesesLanc = biAno.filter(x => x.faturamento != null || x.funcionarios != null).length;
+        const ultBi = biTodos[0];
+        const podeBi = M.pode('empresas');
+        const compLab = c => {
+            const [a, m] = String(c).split('-');
+            return `${['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][+m - 1]}/${a}`;
+        };
 
         return `
         <button class="voltar" onclick="M.voltarEmpresa()"><i class="fa-solid fa-arrow-left"></i> Empresas</button>
@@ -784,6 +832,50 @@ const R = {
                 <b>${funcs.length}</b><span>Funcionários</span></div>
             <div class="mini-card"><i class="fa-solid fa-file-invoice" style="color:#f59e0b"></i>
                 <b>${entregues}/${Math.max(fisc.length, obgs.length || fisc.length)}</b><span>Obrigações mês</span></div>
+        </div>
+        <div class="card">
+            <div class="card-head"><h3><i class="fa-solid fa-chart-column" style="color:#f59e0b"></i> BI — faturamento</h3>
+                <div class="seg">
+                    <button onclick="M.empAno(-1)"><i class="fa-solid fa-chevron-left"></i></button>
+                    <button class="on" style="pointer-events:none">${ano}</button>
+                    <button onclick="M.empAno(1)"><i class="fa-solid fa-chevron-right"></i></button>
+                </div></div>
+            ${biTodos.length || podeBi ? `
+            <div class="sf-kpis">
+                <div class="stat"><div class="stat-titulo">Faturamento ${ano}</div>
+                    <div class="stat-valor" style="font-size:17px">${fmtMoeda(fatAno)}</div></div>
+                <div class="stat"><div class="stat-titulo">Média mensal</div>
+                    <div class="stat-valor" style="font-size:17px">${fmtMoeda(mesesLanc ? fatAno / mesesLanc : 0)}</div></div>
+                <div class="stat"><div class="stat-titulo">Funcionários</div>
+                    <div class="stat-valor">${ultBi?.funcionarios ?? '—'}</div>
+                    <div class="stat-sub">${ultBi ? 'em ' + compLab(ultBi.competencia) : 'últ. lançamento'}</div></div>
+                <div class="stat"><div class="stat-titulo">Meses</div>
+                    <div class="stat-valor">${mesesLanc}</div><div class="stat-sub">lançados em ${ano}</div></div>
+            </div>
+            ${window.Chart ? `
+                <div class="sf-sec" style="border:0;padding-top:2px;margin-top:0">Faturamento mensal</div>
+                <div class="bi-chart" style="height:170px"><canvas id="bi-emp-fat"></canvas></div>
+                <div class="sf-sec">Funcionários por mês</div>
+                <div class="bi-chart" style="height:150px"><canvas id="bi-emp-fun"></canvas></div>`
+            : '<div class="vazio">Gráficos precisam de conexão na primeira carga.</div>'}
+            ${podeBi ? `<div class="sf-sec">Lançamento mensal</div>
+            <div class="bi-form">
+                <input type="month" id="bi-comp" value="${compAtual()}">
+                <input id="bi-fat-in" inputmode="decimal" placeholder="Faturamento (R$)">
+                <input id="bi-fun-in" inputmode="numeric" placeholder="Nº funcionários">
+                <button onclick="M.acao(M.salvarBi)"><i class="fa-solid fa-floppy-disk"></i> Salvar</button>
+            </div>` : ''}
+            ${biTodos.length ? `<div class="tb-wrap"><table class="tbm">
+                <thead><tr><th>Competência</th><th style="text-align:right">Faturamento</th><th style="text-align:right">Funcionários</th>${podeBi ? '<th></th>' : ''}</tr></thead>
+                <tbody>${biTodos.slice(0, 18).map(x => `<tr>
+                    <td>${compLab(x.competencia)}</td>
+                    <td style="text-align:right">${fmtMoeda(x.faturamento)}</td>
+                    <td style="text-align:right">${x.funcionarios ?? '—'}</td>
+                    ${podeBi ? `<td style="text-align:right"><button class="sf-btn" style="padding:5px 8px" onclick="M.acao(M.excluirBi,'${x.id}')"><i class="fa-solid fa-trash"></i></button></td>` : ''}
+                </tr>`).join('')}
+                ${biTodos.length > 18 ? `<tr><td colspan="4" class="diag">… e mais ${biTodos.length - 18} lançamento(s)</td></tr>` : ''}</tbody>
+            </table></div>` : ''}`
+            : '<div class="vazio">Sem lançamentos de faturamento.</div>'}
         </div>
         <div class="card">
             <div class="card-head"><h3><i class="fa-solid fa-file-shield"></i> Certidões</h3></div>
@@ -1253,6 +1345,7 @@ function initBiCharts() {
     const mk = (el, cfg) => el && M._charts.push(new Chart(el, cfg));
 
     _sfChart(mk, grid, moeda);
+    _empChart(mk, grid);
     if (!document.getElementById('bi-fat')) return;
 
     const bi = M.filtra('bi_mensal');
@@ -1313,6 +1406,37 @@ function initBiCharts() {
                           y: { grid: { display: false } } },
                 maintainAspectRatio: false } });
     }
+}
+
+/* BI por empresa (detalhe) — faturamento e funcionários do ano navegável */
+function _empChart(mk, grid) {
+    const el = document.getElementById('bi-emp-fat');
+    if (!el || !M._emp) return;
+    const ano = M._empAno || new Date().getFullYear();
+    const regs = M.cole('bi_mensal').filter(x => x.empresa_id === M._emp);
+    const lab = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
+    const dados = (campo) => Array.from({ length: 12 }, (_, i) => {
+        const r = regs.find(x => x.competencia === `${ano}-${String(i + 1).padStart(2, '0')}`);
+        return r && r[campo] != null ? +r[campo] : null;
+    });
+    mk(el, {
+        type: 'bar',
+        data: { labels: lab, datasets: [{ data: dados('faturamento'),
+            backgroundColor: '#f59e0bcc', borderRadius: 6 }] },
+        options: { plugins: { legend: { display: false },
+                tooltip: { callbacks: { label: (c) => 'R$ ' + (+c.parsed.y).toLocaleString('pt-BR', { maximumFractionDigits: 0 }) } } },
+            scales: { x: { grid: { display: false } },
+                      y: { grid, ticks: { callback: (v) => (+v).toLocaleString('pt-BR', { maximumFractionDigits: 0 }) } } },
+            maintainAspectRatio: false } });
+    mk(document.getElementById('bi-emp-fun'), {
+        type: 'line',
+        data: { labels: lab, datasets: [{ data: dados('funcionarios'),
+            borderColor: '#a78bfa', backgroundColor: '#a78bfa33',
+            fill: true, tension: .3, pointRadius: 4, spanGaps: true }] },
+        options: { plugins: { legend: { display: false } },
+            scales: { x: { grid: { display: false } },
+                      y: { grid, beginAtZero: true, ticks: { precision: 0 } } },
+            maintainAspectRatio: false } });
 }
 
 /* panorama da Situação Fiscal — barras horizontais, por empresa ou por ente */

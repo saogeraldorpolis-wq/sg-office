@@ -636,6 +636,20 @@ body[data-tema="claro"] .pill.info { color: #0284c7; }
 .sf-kpis::-webkit-scrollbar { display: none; }
 .sf-kpis .stat { min-width: 118px; flex-shrink: 0; margin: 0; }
 
+/* lançamento mensal de faturamento (BI da empresa) */
+.bi-form { display: grid; grid-template-columns: 1.1fr 1fr; gap: 8px; margin: 2px 0 8px; }
+.bi-form input {
+    width: 100%; box-sizing: border-box;
+    background: var(--bg2); border: 1px solid var(--borda); border-radius: 12px;
+    padding: 11px 12px; color: var(--txt); font-size: 13px;
+}
+.bi-form input:focus { border-color: var(--prim); outline: none; }
+.bi-form button {
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    border-radius: 12px; font-weight: 700; font-size: 13px; padding: 11px;
+    background: linear-gradient(135deg, var(--prim), var(--prim2)); color: #1a1206;
+}
+
 /* ---------- detalhamento fiscal (DSOT / Receita) ---------- */
 .sf-sec {
     font-size: 11px; font-weight: 700; letter-spacing: .6px;
