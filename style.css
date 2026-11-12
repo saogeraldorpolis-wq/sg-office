@@ -361,6 +361,9 @@ body:has(> #app:not(.hidden)) > .bio-lock { display: none !important; }
     flex-shrink: 0; font-size: 10px; font-weight: 700; letter-spacing: .5px;
     text-transform: uppercase; padding: 4px 9px; border-radius: 999px;
 }
+/* pill clicável (ciclo de status nas Obrigações) */
+button.pill-btn { border: 0; cursor: pointer; font-family: inherit; padding: 6px 11px; }
+button.pill-btn:active { transform: scale(.94); }
 .pill.vencido { background: #ef444422; color: #fca5a5; }
 .pill.perto { background: #f59e0b22; color: #fcd34d; }
 .pill.atencao { background: #fb923c22; color: #fdba74; }

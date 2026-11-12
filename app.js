@@ -7,7 +7,7 @@
  * ========================================================= */
 'use strict';
 
-const VERSAO = '1.3.18';
+const VERSAO = '1.3.20';
 const SUPA = (window.SGO_CFG?.SUPABASE_URL || '').replace(/\/$/, '');
 const AKEY = window.SGO_CFG?.SUPABASE_KEY || '';
 const K_SESS = 'sgo_mob_sess';      // {access_token, refresh_token, usuario, user_id}
@@ -205,7 +205,8 @@ const TABELAS = {
         papel: 'papel', status: 'status', permissoes: 'permissoes' }],
 };
 /* coleções sem tabela própria: ficam em `dados` como sgo_* */
-const CHAVES_DADOS = ['sgo_guias', 'sgo_declaracoes'];
+const CHAVES_DADOS = ['sgo_guias', 'sgo_declaracoes',
+    'sgo_obrigacao_registros', 'sgo_obrigacoes_catalogo'];
 /* select por tabela (quando diferente de *) — usuarios NÃO baixa `senha` */
 const SELECTS = {
     usuarios: 'id,usuario,nome,cpf,email,papel,status,permissoes,auth_user_id,extra'
@@ -519,10 +520,10 @@ const M = window.M = {
     /* ==================== NAVEGAÇÃO ==================== */
     aba(nome) {
         M._aba = nome;
-        M._emp = null; M._busca = '';
+        M._emp = null; M._busca = ''; M._obEmp = null;
         document.querySelectorAll('.nav-btn').forEach(b =>
             b.classList.toggle('ativo', b.dataset.aba === nome));
-        const titulos = { inicio: 'Panorama', fiscal: 'Fiscal', folha: 'Folha',
+        const titulos = { inicio: 'Panorama', obrig: 'Obrigações',
                           situacao: 'Situação fiscal', prazos: 'Prazos e documentos',
                           empresas: 'Empresas', perfil: 'Perfil' };
         $('#topo-titulo').textContent = titulos[nome] || 'SG Office';
@@ -533,7 +534,7 @@ const M = window.M = {
     render() {
         M.badges();
         const map = { inicio: R.inicio, empresas: R.empresas, prazos: R.prazos,
-                      fiscal: R.fiscal, folha: R.folha, situacao: R.situacao,
+                      obrig: R.obrigacoes, situacao: R.situacao,
                       tarefas: R.tarefas, perfil: R.perfil };
         $('#conteudo').innerHTML = M._emp ? R.empresaDetalhe(M._emp) : (map[M._aba] || R.inicio)();
         initBiCharts();
@@ -595,6 +596,50 @@ const M = window.M = {
     sfImporta() {
         toast('A importação de PDFs é feita no desktop — os demonstrativos sincronizam aqui automaticamente.');
     },
+    /* ---------- obrigações unificadas (coleção em `dados`, sgo_*) ---------- */
+    async _gravarDados(chave, valor) {
+        const r = await rest('dados', { method: 'POST',
+            headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+            body: JSON.stringify({ chave, valor,
+                updated_by: 'mobile:' + (M.usuario?.nome || '?') }) });
+        if (!r.ok) {
+            const t = await r.text().catch(() => '');
+            throw new Error(`Falha ao gravar (HTTP ${r.status}). ${t.slice(0, 120)}`);
+        }
+    },
+    obrigAbrir(id) { M._obEmp = id; M.render(); $('#conteudo').scrollTop = 0; },
+    obrigVoltar() { M._obEmp = null; M.render(); },
+    /* pendente → pronta → entregue → (retifica p/ pronta) — mesmo ciclo do desktop */
+    async obrigCiclar(eid, oid, comp) {
+        if (!M.pode('obrigacoes')) throw new Error('Sem permissão para editar.');
+        const arr = M.cole('obrigacao_registros');
+        const r = arr.find(x => x.empresa_id === eid && x.obrigacao_id === oid && x.competencia === comp);
+        const st = r?.status || 'pendente';
+        let prox, recebido = '';
+        if (st === 'pendente') prox = 'pronta';
+        else if (st === 'pronta') {
+            const rec = prompt('Recebido por — nome de quem recebeu:\n(deixe vazio se foi entrega do escritório)');
+            if (rec === null) return;
+            prox = 'entregue'; recebido = rec.trim();
+        } else {
+            if (!confirm('Retificar esta entrega? O item volta para "pronta" e o evento fica no histórico.')) return;
+            prox = 'pronta';
+        }
+        const novo = { ...(r || {}),
+            id: r?.id || (crypto.randomUUID?.()
+                || Date.now().toString(36) + Math.random().toString(36).slice(2, 10)),
+            empresa_id: eid, obrigacao_id: oid, competencia: comp,
+            status: prox, obs: r?.obs || '',
+            por: M.usuario?.nome, em: Date.now(),
+            recebido_por: prox === 'entregue' ? recebido : '',
+            recebido_em: prox === 'entregue' ? Date.now() : null,
+            historico: [...(r?.historico || []),
+                { ts: Date.now(), usuario: M.usuario?.nome || 'mobile', acao: prox }] };
+        const lista = r ? arr.map(x => x.id === r.id ? novo : x) : [...arr, novo];
+        await M._gravarDados('sgo_obrigacao_registros', lista);
+        M.dados.obrigacao_registros = lista;
+        toast(`Obrigação → ${prox}.`); M.render();
+    },
     abrirEmpresa(id) { M._emp = id; M.render(); $('#conteudo').scrollTop = 0; },
     buscar(v) {
         M._busca = v.toLowerCase();
@@ -637,6 +682,68 @@ const funcAtivoEm = (f, comp) => {
     if (f.admissao && String(f.admissao) > comp + '-31') return false;
     if (f.demissao) return String(f.demissao) >= comp + '-01';
     return String(f.situacao || 'ativo').toLowerCase() !== 'demitido';
+};
+
+/* ---------- Obrigações unificadas (trabalhista + fiscal) — modelo do desktop ----------
+   Catálogo em sgo_obrigacoes_catalogo (chave `dados`), com fallback fixo igual ao
+   desktop; registros por empresa+obrigação+competência em sgo_obrigacao_registros
+   (pendente → pronta → entregue). Aplicabilidade = regra por regime, com exceções
+   por empresa em e.obrig_excecoes (só guarda o que difere da regra). */
+const OBRIG_CATALOGO = [
+    { id: 'ob_tr_folha',       nome: 'Fechamento de folha de pagamento', grupo: 'trabalhista' },
+    { id: 'ob_tr_ponto',       nome: 'Folha de ponto',                   grupo: 'trabalhista' },
+    { id: 'ob_tr_rescisao',    nome: 'Rescisões',                        grupo: 'trabalhista' },
+    { id: 'ob_tr_aviso',       nome: 'Aviso prévio',                     grupo: 'trabalhista' },
+    { id: 'ob_tr_ferias',      nome: 'Férias',                           grupo: 'trabalhista' },
+    { id: 'ob_tr_ferias_prev', nome: 'Previsão de férias',               grupo: 'trabalhista' },
+    { id: 'ob_tr_fgts',        nome: 'FGTS',                             grupo: 'trabalhista' },
+    { id: 'ob_tr_inss',        nome: 'INSS/CPP',                         grupo: 'trabalhista' },
+    { id: 'ob_f_relatorio',    nome: 'Relatório fiscal',                 grupo: 'fiscal' },
+    { id: 'ob_f_nfe',          nome: 'Notas fiscais',                    grupo: 'fiscal' },
+    { id: 'ob_f_das',          nome: 'Guia DAS',                         grupo: 'fiscal' },
+    { id: 'ob_f_pis',          nome: 'PIS',                              grupo: 'fiscal' },
+    { id: 'ob_f_cofins',       nome: 'COFINS',                           grupo: 'fiscal' },
+    { id: 'ob_f_irpj',         nome: 'IRPJ',                             grupo: 'fiscal' },
+    { id: 'ob_f_csll',         nome: 'CSLL',                             grupo: 'fiscal' },
+    { id: 'ob_f_iss',          nome: 'ISS',                              grupo: 'fiscal' },
+    { id: 'ob_f_cbs',          nome: 'CBS',                              grupo: 'fiscal' },
+    { id: 'ob_f_icms',         nome: 'ICMS',                             grupo: 'fiscal' },
+    { id: 'ob_f_mei',          nome: 'Guia MEI (DAS-MEI)',               grupo: 'fiscal' },
+];
+const OBRIG_GRUPOS = { trabalhista: 'Trabalhistas', fiscal: 'Fiscais' };
+const _isPF = (e) => (e?.cnpj || '').replace(/\D/g, '').length === 11;
+const OBRIG_FIS_PJ = ['ob_f_relatorio', 'ob_f_nfe'];
+const OBRIG_FIS_SIMPLES = [...OBRIG_FIS_PJ, 'ob_f_das', 'ob_f_icms', 'ob_f_cbs'];
+const OBRIG_FIS_LP = [...OBRIG_FIS_PJ, 'ob_f_pis', 'ob_f_cofins', 'ob_f_irpj',
+    'ob_f_csll', 'ob_f_iss', 'ob_f_icms', 'ob_f_cbs'];
+const OBRIG_REGRAS_FIS = {
+    'Simples Nacional': OBRIG_FIS_SIMPLES,
+    'Lucro Presumido': OBRIG_FIS_LP,
+    'Lucro Real': OBRIG_FIS_LP,
+    'MEI': [...OBRIG_FIS_PJ, 'ob_f_mei'],
+};
+const OBRIG_FIS_TODOS = new Set([...OBRIG_FIS_PJ, ...Object.values(OBRIG_REGRAS_FIS).flat()]);
+const obrigCatalogo = () => {
+    const db = M.cole('obrigacoes_catalogo');
+    return db.length ? db : OBRIG_CATALOGO;
+};
+const obrigRegraIds = (e) => {
+    const ids = new Set(OBRIG_CATALOGO.filter(o => o.grupo === 'trabalhista').map(o => o.id));
+    if (!_isPF(e)) (OBRIG_REGRAS_FIS[regimeVigente(e)] || []).forEach(id => ids.add(id));
+    return ids;
+};
+const obrigAplicavel = (e, oid) => {
+    const exc = e?.obrig_excecoes || {};
+    if (Object.prototype.hasOwnProperty.call(exc, oid)) return !!exc[oid];
+    const ob = obrigCatalogo().find(o => o.id === oid);
+    if (ob?.grupo === 'trabalhista') return true;
+    if (OBRIG_FIS_TODOS.has(oid)) return obrigRegraIds(e).has(oid);
+    return true;
+};
+const OBRIG_ST = {
+    pendente: { lbl: 'pendente', pill: 'atencao', ico: 'fa-hourglass-half', cor: 'var(--perigo)' },
+    pronta:   { lbl: 'pronta',   pill: 'info',    ico: 'fa-box-open',       cor: '#38bdf8' },
+    entregue: { lbl: 'entregue', pill: 'ok',      ico: 'fa-circle-check',   cor: 'var(--ok)' },
 };
 
 /* cards do Resumo que alternam sozinhos (a cada 4s):
@@ -827,9 +934,9 @@ const R = {
         const sit = M.cole('situacao_fiscal').filter(s => s.empresa_id === id)
             .sort((a, b) => String(b.atualizado_em || '').localeCompare(String(a.atualizado_em || '')))[0];
         const funcs = M.cole('funcionarios').filter(f => f.empresa_id === id && !f.demissao);
-        const fisc = M.cole('fiscal_status').filter(f => f.empresa_id === id && f.competencia === compAtual());
-        const obgs = M.cole('fiscal_obrigacoes');
-        const entregues = fisc.filter(f => f.status === 'entregue').length;
+        const obrs = M.cole('obrigacao_registros').filter(f => f.empresa_id === id && f.competencia === compAtual());
+        const obTot = obrigCatalogo().filter(o => obrigAplicavel(e, o.id)).length;
+        const entregues = obrs.filter(f => f.status === 'entregue').length;
         const hist = (e.regimes || []).slice().sort((a, b) => String(b.inicio || '').localeCompare(String(a.inicio || '')));
         const ano = M._empAno || new Date().getFullYear();
         const biTodos = M.cole('bi_mensal').filter(x => x.empresa_id === id)
@@ -860,7 +967,7 @@ const R = {
             <div class="mini-card"><i class="fa-solid fa-users" style="color:#34d399"></i>
                 <b>${funcs.length}</b><span>Funcionários</span></div>
             <div class="mini-card"><i class="fa-solid fa-file-invoice" style="color:#f59e0b"></i>
-                <b>${entregues}/${Math.max(fisc.length, obgs.length || fisc.length)}</b><span>Obrigações mês</span></div>
+                <b>${entregues}/${obTot}</b><span>Obrigações mês</span></div>
         </div>
         <div class="card">
             <div class="card-head"><h3><i class="fa-solid fa-chart-column" style="color:#f59e0b"></i> BI — faturamento</h3>
@@ -947,84 +1054,97 @@ const R = {
             ${corpo}`;
     },
 
-    fiscal() {
-        const obrig = M.cole('fiscal_obrigacoes');
-        const rows0 = M.filtra('fiscal_status');
-        const { comps, sel } = compSel(rows0);
-        const rows = rows0.filter(r => r.competencia === sel);
-        const nomeObr = id => obrig.find(o => o.id === id)?.nome || id || 'Obrigação';
-        const porObr = {};
-        for (const r of rows) (porObr[r.obrigacao_id] ||= []).push(r);
-        const ids = obrig.length ? obrig.map(o => o.id) : Object.keys(porObr);
-        const nPend = rows.filter(r => (r.status || 'pendente') === 'pendente').length;
+    /* ---------- OBRIGAÇÕES (fiscal + folha unificadas, modelo do desktop) ---------- */
+    obrigacoes() {
+        if (M._obEmp) return R.obrigEmpresa(M._obEmp);
+        const cat = obrigCatalogo();
+        const regs = M.filtra('obrigacao_registros');
+        const { comps, sel } = compSel(regs);
+        const emps = M.filtra('empresas').filter(ativa)
+            .sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
+        const prog = (e) => {
+            let tot = 0, prontas = 0, entregues = 0;
+            cat.forEach(o => {
+                if (!obrigAplicavel(e, o.id)) return;
+                tot++;
+                const st = regs.find(r => r.empresa_id === e.id && r.obrigacao_id === o.id
+                    && r.competencia === sel)?.status;
+                if (st === 'pronta') prontas++;
+                else if (st === 'entregue') entregues++;
+            });
+            return { tot, prontas, entregues, pend: tot - prontas - entregues };
+        };
+        const soma = emps.reduce((s, e) => {
+            const p = prog(e);
+            s.tot += p.tot; s.pr += p.prontas; s.en += p.entregues; s.pd += p.pend;
+            return s;
+        }, { tot: 0, pr: 0, en: 0, pd: 0 });
         return `
         <div class="chips">${compChips(comps, sel)}</div>
         <div class="stats">
             <div class="stat"><div class="stat-titulo">PENDENTES</div>
-                <div class="stat-valor" style="color:var(--perigo)">${nPend}</div>
-                <div class="stat-sub">obrigações em ${esc(sel)}</div></div>
+                <div class="stat-valor" style="color:${soma.pd ? 'var(--perigo)' : 'var(--ok)'}">${soma.pd}</div>
+                <div class="stat-sub">de ${soma.tot} obrigações</div></div>
+            <div class="stat"><div class="stat-titulo">PRONTAS P/ ENTREGA</div>
+                <div class="stat-valor" style="color:#38bdf8">${soma.pr}</div>
+                <div class="stat-sub">na bandeja do office boy</div></div>
             <div class="stat"><div class="stat-titulo">ENTREGUES</div>
-                <div class="stat-valor" style="color:var(--ok)">${rows.length - nPend}</div>
-                <div class="stat-sub">de ${rows.length} marcadas</div></div>
+                <div class="stat-valor" style="color:var(--ok)">${soma.en}</div>
+                <div class="stat-sub">em ${esc(sel)}</div></div>
         </div>
-        ${ids.length === 0
-            ? '<div class="vazio"><i class="fa-regular fa-file-lines"></i> Nenhuma obrigação cadastrada.</div>'
-            : ids.map(oid => {
-                const rs = porObr[oid] || [];
-                const pend = rs.filter(r => (r.status || 'pendente') === 'pendente');
-                return `<div class="card">
-                    <div class="card-head"><h3>${esc(nomeObr(oid))}</h3>
-                        <span class="pill ${pend.length ? 'atencao' : 'ok'}">${rs.length - pend.length}/${rs.length} entregues</span></div>
-                    ${rs.length === 0
-                        ? '<div class="vazio">Nenhuma marcação nesta competência.</div>'
-                        : pend.length === 0
-                            ? '<div class="vazio"><i class="fa-regular fa-circle-check"></i> Tudo entregue.</div>'
-                            : pend.map(r => `<div class="linha">
-                                <span class="ic ic-sm" style="color:var(--perigo)"><i class="fa-solid fa-hourglass-half"></i></span>
-                                <div class="linha-txt"><b>${esc(empNome(r.empresa_id))}</b>
-                                <span>pendente${r.por ? ' · ' + esc(r.por) : ''}</span></div></div>`).join('')}
-                </div>`;
-            }).join('')}`;
+        <p class="ap-sub" style="margin:0 2px 10px">Fiscal + folha unificados — toque na empresa para ver e atualizar as obrigações.</p>
+        ${emps.length === 0 ? '<div class="vazio"><i class="fa-regular fa-building"></i> Nenhuma empresa no escopo.</div>'
+            : '<div class="card lista-emp">' + emps.map(e => {
+                const p = prog(e);
+                return `<button class="linha-emp" onclick="M.obrigAbrir('${e.id}')">
+                    <div class="linha-ico"><i class="fa-solid fa-clipboard-check"></i></div>
+                    <div class="linha-txt"><b>${esc(e.nome)}</b>
+                        <span>${esc(regimeVigente(e))} · ${p.entregues + p.prontas}/${p.tot} · ${p.prontas ? p.prontas + ' pronta(s)' : 'nada pronto'}</span></div>
+                    ${p.pend ? `<span class="pill atencao">${p.pend}</span>` : '<span class="pill ok">ok</span>'}
+                    <i class="fa-solid fa-chevron-right seta"></i></button>`;
+            }).join('') + '</div>'}`;
     },
 
-    folha() {
-        const fech = M.filtra('folha_fechamentos');
-        const { comps, sel } = compSel(fech);
-        const rows = fech.filter(r => r.competencia === sel);
-        const funcs = M.filtra('funcionarios');
-        const bi = M.filtra('bi_mensal');
-        /* efetivo por competência: prefere o lançado no BI (folha real);
-           sem lançamento, estima pelo cadastro (admitidos - demitidos) */
-        const nAtivos = id => {
-            const b = bi.find(x => x.empresa_id === id && x.competencia === sel);
-            if (b && b.funcionarios != null) return +b.funcionarios;
-            return funcs.filter(f => f.empresa_id === id && funcAtivoEm(f, sel)).length;
+    obrigEmpresa(eid) {
+        const e = M.empresa(eid);
+        if (!e) { M._obEmp = null; return R.obrigacoes(); }
+        const cat = obrigCatalogo();
+        const { comps, sel } = compSel(M.filtra('obrigacao_registros'));
+        const regs = M.filtra('obrigacao_registros')
+            .filter(r => r.empresa_id === eid && r.competencia === sel);
+        const pode = M.pode('obrigacoes');
+        const linha = (o) => {
+            const r = regs.find(x => x.obrigacao_id === o.id);
+            const st = OBRIG_ST[r?.status || 'pendente'] || OBRIG_ST.pendente;
+            const sub = r?.status === 'entregue' && r.recebido_por ? `recebido por ${r.recebido_por}`
+                : r?.por ? `por ${r.por}` : (r?.obs || '');
+            return `<div class="linha">
+                <span class="ic ic-sm" style="color:${st.cor}"><i class="fa-solid ${st.ico}"></i></span>
+                <div class="linha-txt"><b>${esc(o.nome)}</b>${sub ? `<span>${esc(sub)}</span>` : ''}</div>
+                ${pode ? `<button class="pill pill-btn ${st.pill}" onclick="M.acao(M.obrigCiclar,'${eid}','${o.id}','${sel}')">${st.lbl}</button>`
+                      : `<span class="pill ${st.pill}">${st.lbl}</span>`}</div>`;
         };
-        const temBi = rows.some(r => {
-            const b = bi.find(x => x.empresa_id === r.empresa_id && x.competencia === sel);
-            return b && b.funcionarios != null;
-        });
-        const nPend = rows.filter(r => (r.status || 'pendente') !== 'fechado').length;
+        const grupos = ['trabalhista', 'fiscal'].map(g => {
+            const itens = cat.filter(o => o.grupo === g && obrigAplicavel(e, o.id));
+            if (!itens.length) return '';
+            const nEnt = itens.filter(o =>
+                regs.find(r => r.obrigacao_id === o.id)?.status === 'entregue').length;
+            return `<div class="card">
+                <div class="card-head"><h3><i class="fa-solid ${g === 'trabalhista' ? 'fa-briefcase' : 'fa-file-invoice'}"></i> ${OBRIG_GRUPOS[g]}</h3>
+                    <span class="pill neutro">${nEnt}/${itens.length} entregues</span></div>
+                ${itens.map(linha).join('')}</div>`;
+        }).join('');
+        const naoAp = cat.filter(o => !obrigAplicavel(e, o.id)).length;
         return `
-        <div class="chips">${compChips(comps, sel)}</div>
-        <div class="stats">
-            <div class="stat"><div class="stat-titulo">FUNCIONÁRIOS</div>
-                <div class="stat-valor">${rows.reduce((s, r) => s + nAtivos(r.empresa_id), 0)}</div>
-                <div class="stat-sub">${temBi ? 'lançados em' : 'ativos em'} ${esc(sel)}</div></div>
-            <div class="stat"><div class="stat-titulo">FECHAMENTOS</div>
-                <div class="stat-valor" style="color:${nPend ? 'var(--perigo)' : 'var(--ok)'}">${rows.length - nPend}/${rows.length}</div>
-                <div class="stat-sub">fechados em ${esc(sel)}</div></div>
+        <button class="voltar" onclick="M.obrigVoltar()"><i class="fa-solid fa-arrow-left"></i> Obrigações</button>
+        <div class="card emp-cab">
+            <h2>${esc(e.nome)}</h2>
+            <p>${esc(e.cnpj || 'sem CNPJ')}${e.municipio ? ' · ' + esc(e.municipio) + '/' + esc(e.uf || '') : ''}</p>
         </div>
-        ${rows.length === 0
-            ? '<div class="vazio"><i class="fa-regular fa-calendar-check"></i> Nenhum fechamento nesta competência.</div>'
-            : '<div class="card lista-emp">' + rows.map(r => {
-                const ok = (r.status || 'pendente') === 'fechado';
-                return `<div class="linha">
-                    <span class="ic ic-sm" style="color:${ok ? 'var(--ok)' : 'var(--perigo)'}"><i class="fa-solid ${ok ? 'fa-circle-check' : 'fa-hourglass-half'}"></i></span>
-                    <div class="linha-txt"><b>${esc(empNome(r.empresa_id))}</b>
-                    <span>${nAtivos(r.empresa_id)} funcionário(s)${r.por ? ' · ' + esc(r.por) : ''}</span></div>
-                    <span class="pill ${ok ? 'ok' : 'atencao'}">${esc(r.status || 'pendente')}</span></div>`;
-            }).join('') + '</div>'}`;
+        <div class="chips">${compChips(comps, sel)}</div>
+        ${grupos || '<div class="vazio">Nenhuma obrigação se aplica a esta empresa.</div>'}
+        ${naoAp ? `<p class="ap-sub" style="margin:4px 2px 0">+ ${naoAp} obrigação(ões) não se aplicam — ajuste na Aplicabilidade (desktop).</p>` : ''}
+        ${pode ? `<p class="ap-sub" style="margin:4px 2px 0">Toque no status para avançar: pendente → pronta → entregue (com "recebido por").</p>` : ''}`;
     },
 
     situacao() {
