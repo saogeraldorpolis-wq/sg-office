@@ -7,7 +7,7 @@
  * ========================================================= */
 'use strict';
 
-const VERSAO = '1.3.14';
+const VERSAO = '1.3.15';
 const SUPA = (window.SGO_CFG?.SUPABASE_URL || '').replace(/\/$/, '');
 const AKEY = window.SGO_CFG?.SUPABASE_KEY || '';
 const K_SESS = 'sgo_mob_sess';      // {access_token, refresh_token, usuario, user_id}
@@ -537,6 +537,7 @@ const M = window.M = {
                       tarefas: R.tarefas, perfil: R.perfil };
         $('#conteudo').innerHTML = M._emp ? R.empresaDetalhe(M._emp) : (map[M._aba] || R.inicio)();
         initBiCharts();
+        statTicker();
     },
 
     badges() {
@@ -638,6 +639,25 @@ const funcAtivoEm = (f, comp) => {
     return String(f.situacao || 'ativo').toLowerCase() !== 'demitido';
 };
 
+/* cards do Resumo que alternam sozinhos (a cada 4s):
+ * EMPRESAS carteira pessoal ↔ global · FUNCIONÁRIOS ativos ↔ inativos */
+function statTicker() {
+    clearInterval(M._statTimer); M._statTimer = null;
+    const ev = $('#st-emp-v'), es = $('#st-emp-s'), fv = $('#st-fun-v'), fs = $('#st-fun-s');
+    if (!ev || !fv) return;
+    let alt = false;
+    M._statTimer = setInterval(() => {
+        alt = !alt;
+        const ft = M.filtra('funcionarios');
+        const at = ft.filter(funcAtivo).length;
+        ev.textContent = alt ? M.cole('empresas').filter(ativa).length
+                             : M.filtra('empresas').filter(ativa).length;
+        es.textContent = alt ? 'carteira global' : 'carteira pessoal';
+        fv.textContent = alt ? ft.length - at : at;
+        fs.textContent = alt ? `inativos · ${at} ativo(s)` : `ativos · ${ft.length - at} inativo(s)`;
+    }, 4000);
+}
+
 /* competência selecionável nos módulos Fiscal/Folha (chips, mais recente 1º) */
 function compSel(rows) {
     const comps = [...new Set(rows.map(r => r.competencia).filter(Boolean))].sort().reverse();
@@ -711,7 +731,9 @@ const R = {
         const lemb = M.filtra('lembretes').filter(l => !l.concluido).length;
         const tar = M.filtra('tarefas').filter(t => (t.coluna || 'afazer') !== 'concluido').length;
         const proximos = itensPrazo().filter(i => (i.dias ?? 99) <= 15).slice(0, 8);
-        const funcs = M.filtra('funcionarios').length;
+        const funcsT = M.filtra('funcionarios');
+        const funcsAt = funcsT.filter(funcAtivo).length;
+        const empsG = M.cole('empresas').filter(ativa).length;
         const prox = itensPrazo()[0];
         const admin = u.papel === 'admin';
         const ano = String(new Date().getFullYear());
@@ -741,11 +763,11 @@ const R = {
             <small>nenhum vencimento próximo</small></div></div>`}
         <div class="stats">
             <div class="stat" onclick="M.aba('empresas')"><div class="stat-titulo">EMPRESAS</div>
-                <div class="stat-valor">${emps.length}</div>
-                <div class="stat-sub">ativas na visão atual</div></div>
+                <div class="stat-valor" id="st-emp-v">${emps.length}</div>
+                <div class="stat-sub" id="st-emp-s">carteira pessoal</div></div>
             <div class="stat"><div class="stat-titulo">FUNCIONÁRIOS</div>
-                <div class="stat-valor">${funcs}</div>
-                <div class="stat-sub">cadastrados</div></div>
+                <div class="stat-valor" id="st-fun-v">${funcsAt}</div>
+                <div class="stat-sub" id="st-fun-s">ativos · ${funcsT.length - funcsAt} inativo(s)</div></div>
             <div class="stat" onclick="M.aba('prazos')"><div class="stat-titulo">PRAZOS ≤15 DIAS</div>
                 <div class="stat-valor">${certsV + certs15 + certifs15}</div>
                 <div class="stat-sub">certidões e certificados</div></div>
