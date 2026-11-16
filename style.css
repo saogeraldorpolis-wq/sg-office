@@ -709,3 +709,117 @@ body[data-tema="claro"] .pill.info { color: #0284c7; }
     border: 1px solid var(--borda); border-radius: 12px;
     background: var(--bg2); padding: 12px; font-size: 11px; color: var(--txt2);
 }
+
+/* ============================================================
+   CAMADA PREMIUM — navy + dourado da marca (portado do desktop)
+   Refina o tema padrao "sacro"; as demais paletas seguem vivas.
+   ============================================================ */
+
+/* ---- sacro/padrao refinado: navy profundo + dourado do selo ---- */
+:root, body[data-tema="sacro"] {
+    --bg: #070d1c;
+    --bg2: #0d1526;
+    --card: #101a30;
+    --card2: #16233f;
+    --borda: #d4af5f24;
+    --prim: #d4af5f;
+    --prim2: #b98f3e;
+    --sombra: 0 8px 30px rgba(0,0,0,.42);
+}
+/* aura de fundo acompanha o dourado novo */
+body[data-fundo="aura"] {
+    background:
+        radial-gradient(700px 400px at 50% -10%, #d4af5f16, transparent 60%),
+        radial-gradient(500px 300px at 90% 110%, #38bdf810, transparent 60%),
+        var(--bg);
+}
+
+/* ---- base ---- */
+body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+::selection { background: color-mix(in srgb, var(--prim) 32%, transparent); }
+:focus-visible { outline: 2px solid color-mix(in srgb, var(--prim) 55%, transparent); outline-offset: 2px; }
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--txt3) 45%, transparent) transparent; }
+.pill, .mini-card b, .stat-valor, .tbm td { font-variant-numeric: tabular-nums; }
+
+/* ---- superficies: sombra em camadas + borda suave ---- */
+.card, .mini-card, .stat, .login-card, .menu, .upd-card {
+    box-shadow: 0 1px 2px rgba(0,0,0,.22), 0 14px 34px -18px rgba(0,0,0,.55);
+}
+.card:active { }
+.mini-card, .stat, .card-destaque, .opcao, .linha-emp, .chip, .sf-btn {
+    transition: transform .14s ease, border-color .18s ease, background .18s ease, box-shadow .2s ease;
+}
+.mini-card:active, .stat:active { transform: scale(.97); }
+.card-destaque:hover, .opcao:hover { border-color: color-mix(in srgb, var(--prim) 40%, transparent); }
+.linha-emp:hover { background: color-mix(in srgb, var(--prim) 4%, transparent); }
+
+/* ---- topo ---- */
+.topo {
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    border-bottom-color: color-mix(in srgb, var(--borda) 70%, transparent);
+}
+.topo-titulo strong { letter-spacing: -.01em; }
+.topo-btn { transition: border-color .18s ease, color .18s ease, transform .14s ease; }
+.topo-btn:active { transform: scale(.94); border-color: var(--prim); color: var(--prim); }
+.topo-logo { box-shadow: 0 3px 10px rgba(0,0,0,.4); }
+
+/* ---- nav inferior ---- */
+.nav-inferior {
+    background: color-mix(in srgb, var(--bg2) 88%, transparent);
+    border-top-color: color-mix(in srgb, var(--borda) 75%, transparent);
+}
+.nav-btn { transition: color .18s ease; }
+.nav-btn i { transition: background .22s ease, transform .18s ease, box-shadow .22s ease; }
+.nav-btn.ativo i {
+    background: color-mix(in srgb, var(--prim) 18%, transparent);
+    box-shadow: 0 0 14px -4px color-mix(in srgb, var(--prim) 40%, transparent);
+}
+.nav-btn:active i { transform: scale(.9); }
+
+/* ---- botoes ---- */
+.btn-entrar {
+    box-shadow: 0 4px 14px -4px color-mix(in srgb, var(--prim) 45%, transparent),
+        inset 0 1px 0 rgba(255,255,255,.2);
+    transition: filter .18s ease, transform .14s ease, box-shadow .2s ease;
+}
+.btn-entrar:active { transform: scale(.985); filter: brightness(1.08); }
+.chip.on { box-shadow: 0 3px 12px -4px color-mix(in srgb, var(--prim) 45%, transparent); }
+
+/* ---- campos: foco com anel ---- */
+.campo, .busca, .bi-form input {
+    transition: border-color .18s ease, box-shadow .18s ease;
+}
+.campo:focus-within, .busca:focus-within {
+    border-color: var(--prim);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--prim) 16%, transparent);
+}
+.bi-form input:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--prim) 16%, transparent); }
+
+/* ---- menu lateral / modais ---- */
+.menu { box-shadow: -18px 0 50px -18px rgba(0,0,0,.6); }
+.menu-item { transition: background .15s ease, transform .12s ease; }
+.menu-veu { backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+.modal-veu { backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); }
+.modal-ap { box-shadow: 0 -18px 50px -18px rgba(0,0,0,.6); }
+
+/* ---- pills / chips / toast ---- */
+.pill { letter-spacing: .02em; font-weight: 600; }
+.chip { transition: background .18s ease, color .18s ease, border-color .18s ease, transform .14s ease; }
+.toast {
+    border-color: color-mix(in srgb, var(--prim) 45%, transparent);
+    box-shadow: 0 10px 30px -8px rgba(0,0,0,.6);
+    font-weight: 600;
+}
+
+/* ---- listas / detalhes ---- */
+.linha, .linha-emp { border-radius: 10px; transition: background .15s ease; }
+.kv b { font-variant-numeric: tabular-nums; }
+.tbm th { letter-spacing: .06em; }
+
+/* ---- avatar / destaque ---- */
+.avatar, .menu-avatar, .hero-avatar {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--prim) 35%, transparent),
+        0 4px 12px -4px rgba(0,0,0,.5);
+}
+.ap-head b { color: var(--prim); }
+.esp summary { transition: color .15s ease; }
